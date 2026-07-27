@@ -1,6 +1,7 @@
 # Worlds Postgres
 
-Standalone PostgreSQL quad store and search index package extracted for the [`@worlds`](https://jsr.io/@worlds) ecosystem.
+Standalone PostgreSQL quad store and search index package extracted for the
+[`@worlds`](https://jsr.io/@worlds) ecosystem.
 
 ## Install
 
