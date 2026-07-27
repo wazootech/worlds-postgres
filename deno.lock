@@ -2,7 +2,9 @@
   "version": "5",
   "specifiers": {
     "jsr:@std/assert@^1.0.19": "1.0.19",
+    "jsr:@std/encoding@^1.0.10": "1.0.10",
     "jsr:@std/internal@^1.0.12": "1.0.14",
+    "jsr:@worlds/client@0.0.17": "0.0.17",
     "npm:@ai-sdk/google@^3.0.80": "3.0.91_zod@4.4.3",
     "npm:@comunica/query-sparql-rdfjs-lite@^5.2.3": "5.2.3",
     "npm:@langchain/core@^1.1.48": "1.2.2",
@@ -23,8 +25,20 @@
         "jsr:@std/internal"
       ]
     },
+    "@std/encoding@1.0.10": {
+      "integrity": "8783c6384a2d13abd5e9e87a7ae0520a30e9f56aeeaa3bdf910a3eaaf5c811a1"
+    },
     "@std/internal@1.0.14": {
       "integrity": "291516b3d4c35024d6ffbc0a9df5bf4c64116e05b50012cf846710152d2ffdf7"
+    },
+    "@worlds/client@0.0.17": {
+      "integrity": "bc79ea368739f320ad95fd0e4197aaab7f056f93a2c252a5a5459fc3735787c7",
+      "dependencies": [
+        "jsr:@std/encoding",
+        "npm:@rdfjs/types",
+        "npm:@types/n3",
+        "npm:rdf-canonize"
+      ]
     }
   },
   "npm": {

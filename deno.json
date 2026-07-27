@@ -1,6 +1,7 @@
 {
   "name": "@worlds/postgres",
   "version": "0.0.1",
+  "license": "MIT",
   "nodeModulesDir": "auto",
   "exports": {
     ".": "./src/mod.ts",

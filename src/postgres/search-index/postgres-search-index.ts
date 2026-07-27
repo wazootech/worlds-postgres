@@ -29,7 +29,10 @@ export class PostgresSearchIndex implements SearchIndexInterface {
    * Performs hybrid full-text and vector search across PostgreSQL search chunks.
    */
   async search(request: SearchRequest): Promise<SearchResponse> {
-    const { query, topK = 10, minScore = 0.0 } = request;
+    const query = request.query;
+    const topK = (request as unknown as { topK?: number }).topK ?? 10;
+    const minScore = (request as unknown as { minScore?: number }).minScore ??
+      0.0;
 
     // Full-Text Search via PostgreSQL tsvector / tsquery
     const rows = await this.sql.unsafe<{
