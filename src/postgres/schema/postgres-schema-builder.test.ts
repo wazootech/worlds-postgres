@@ -1,4 +1,4 @@
-import { assertEquals, assertStringIncludes } from "@std/assert";
+import { assertStringIncludes } from "@std/assert";
 import { buildPostgresSchemaSql } from "./postgres-schema-builder.ts";
 
 Deno.test("buildPostgresSchemaSql generates valid SQL statements", () => {
