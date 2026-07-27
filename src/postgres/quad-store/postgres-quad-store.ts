@@ -10,11 +10,17 @@ import type postgres from "postgres";
 
 const { quad, namedNode, literal, defaultGraph } = DataFactory;
 
+/**
+ * PostgresQuadStoreOptions defines the configuration options for PostgresQuadStore.
+ */
 export interface PostgresQuadStoreOptions {
   sql: postgres.Sql;
   tableName?: string;
 }
 
+/**
+ * PostgresQuadStore is a PostgreSQL-backed quad store satisfying the QuadStoreInterface contract.
+ */
 export class PostgresQuadStore implements QuadStoreInterface {
   private sql: postgres.Sql;
   private tableName: string;

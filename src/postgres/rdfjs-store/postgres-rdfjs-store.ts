@@ -2,12 +2,18 @@ import type * as rdfjs from "@rdfjs/types";
 import { Readable } from "node:stream";
 import type postgres from "postgres";
 
+/**
+ * PostgresRdfjsStoreOptions defines configuration options for PostgresRdfjsStore.
+ */
 export interface PostgresRdfjsStoreOptions {
   sql: postgres.Sql;
   tableName?: string;
   matchPageSize?: number;
 }
 
+/**
+ * PostgresRdfjsStore is a PostgreSQL-backed RDF.js ReadSource for SPARQL query engines.
+ */
 export class PostgresRdfjsStore {
   private sql: postgres.Sql;
   private tableName: string;

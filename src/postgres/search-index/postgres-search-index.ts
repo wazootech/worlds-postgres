@@ -8,12 +8,18 @@ import type {
 } from "@worlds/client/search-index";
 import type postgres from "postgres";
 
+/**
+ * PostgresSearchIndexOptions defines configuration options for PostgresSearchIndex.
+ */
 export interface PostgresSearchIndexOptions {
   sql: postgres.Sql;
   tableName?: string;
   quadsTableName?: string;
 }
 
+/**
+ * PostgresSearchIndex is a PostgreSQL-backed search index satisfying SearchIndexInterface.
+ */
 export class PostgresSearchIndex implements SearchIndexInterface {
   private sql: postgres.Sql;
   private tableName: string;
