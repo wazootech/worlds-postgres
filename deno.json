@@ -1,0 +1,55 @@
+{
+  "name": "@worlds/postgres",
+  "version": "0.0.1",
+  "nodeModulesDir": "auto",
+  "exports": {
+    ".": "./src/mod.ts",
+    "./quad-store": "./src/postgres/quad-store/mod.ts",
+    "./search-index": "./src/postgres/search-index/mod.ts",
+    "./rdfjs-store": "./src/postgres/rdfjs-store/mod.ts",
+    "./schema": "./src/postgres/schema/postgres-schema-builder.ts"
+  },
+  "imports": {
+    "@/": "./src/",
+    "ai": "npm:ai@^6.0.195",
+    "@ai-sdk/google": "npm:@ai-sdk/google@^3.0.80",
+    "@comunica/query-sparql-rdfjs-lite": "npm:@comunica/query-sparql-rdfjs-lite@^5.2.3",
+    "@rdfjs/types": "npm:@rdfjs/types@^2.0.1",
+    "postgres": "npm:postgres@^3.4.5",
+    "pgvector": "npm:pgvector@^0.2.0",
+    "@worlds/client": "jsr:@worlds/client@0.0.17",
+    "@worlds/client/quad-store": "jsr:@worlds/client@0.0.17/quad-store",
+    "@worlds/client/search-index": "jsr:@worlds/client@0.0.17/search-index",
+    "@worlds/client/search-index/embedding-service": "jsr:@worlds/client@0.0.17/search-index/embedding-service",
+    "@worlds/client/search-index/quad-chunker": "jsr:@worlds/client@0.0.17/search-index/quad-chunker",
+    "@worlds/client/adapters/comunica": "jsr:@worlds/client@0.0.17/adapters/comunica",
+    "@std/assert": "jsr:@std/assert@^1.0.19",
+    "@std/async": "jsr:@std/async@^1.4.0",
+    "@std/encoding": "jsr:@std/encoding@^1.0.10",
+    "@std/fs": "jsr:@std/fs@^1.0.24",
+    "@std/path": "jsr:@std/path@^1.1.5",
+    "@types/n3": "npm:@types/n3@1.26.1",
+    "n3": "npm:n3@^2.0.3",
+    "rdf-canonize": "npm:rdf-canonize@^5.0.0",
+    "@langchain/core": "npm:@langchain/core@^1.1.48",
+    "@langchain/textsplitters": "npm:@langchain/textsplitters@^1.0.1",
+    "zod": "npm:zod@^4.4.3"
+  },
+  "tasks": {
+    "fmt": "deno fmt",
+    "fmt:check": "deno fmt --check",
+    "lint": "deno lint",
+    "check": "deno check",
+    "test": "deno test --allow-all",
+    "publish:dry": "deno publish --dry-run --allow-dirty",
+    "ci": {
+      "description": "Formats, lints, checks, and tests the code",
+      "dependencies": [
+        "fmt:check",
+        "lint",
+        "check",
+        "test"
+      ]
+    }
+  }
+}
