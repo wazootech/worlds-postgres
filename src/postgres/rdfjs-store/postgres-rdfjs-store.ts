@@ -29,10 +29,10 @@ export class PostgresRdfjsStore {
    * match returns an RDF/JS Stream of quads matching the given quad pattern.
    */
   match(
-    subject?: rdfjs.Term | null,
-    predicate?: rdfjs.Term | null,
-    object?: rdfjs.Term | null,
-    graph?: rdfjs.Term | null,
+    _subject?: rdfjs.Term | null,
+    _predicate?: rdfjs.Term | null,
+    _object?: rdfjs.Term | null,
+    _graph?: rdfjs.Term | null,
   ): rdfjs.Stream<rdfjs.Quad> {
     const rowStream = new Readable({
       objectMode: true,
@@ -48,10 +48,10 @@ export class PostgresRdfjsStore {
    * countQuads returns the number of quads matching the given quad pattern.
    */
   async countQuads(
-    subject?: rdfjs.Term | null,
-    predicate?: rdfjs.Term | null,
-    object?: rdfjs.Term | null,
-    graph?: rdfjs.Term | null,
+    _subject?: rdfjs.Term | null,
+    _predicate?: rdfjs.Term | null,
+    _object?: rdfjs.Term | null,
+    _graph?: rdfjs.Term | null,
   ): Promise<number> {
     const rows = await this.sql.unsafe<{ count: string }[]>(
       `SELECT COUNT(*) AS count FROM ${this.tableName}`,
