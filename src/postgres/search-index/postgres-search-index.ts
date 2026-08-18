@@ -5,7 +5,7 @@ import type {
   SearchRequest,
   SearchResponse,
   SearchResult,
-} from "@worlds/client/search-index";
+} from "@worlds/sdk/search-index";
 import type postgres from "postgres";
 
 /**

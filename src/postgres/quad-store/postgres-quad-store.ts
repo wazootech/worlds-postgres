@@ -4,8 +4,8 @@ import type {
   ExportResponse,
   ImportRequest,
   QuadStoreInterface,
-} from "@worlds/client/quad-store";
-import { DataFactory } from "n3";
+} from "@worlds/sdk/quad-store";
+import { DataFactory } from "@wazoo/sparql-engine";
 import type postgres from "postgres";
 
 const { quad, namedNode, literal, defaultGraph } = DataFactory;
