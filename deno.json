@@ -15,7 +15,7 @@
     "ai": "npm:ai@^6.0.195",
     "@ai-sdk/google": "npm:@ai-sdk/google@^3.0.80",
     "@rdfjs/types": "npm:@rdfjs/types@^2.0.1",
-    "@wazoo/sparql-engine": "jsr:@wazoo/sparql-engine@^0.3.0",
+    "@wazoo/sparql-engine": "jsr:@wazoo/sparql-engine@^0.4.1",
     "postgres": "npm:postgres@^3.4.5",
     "pgvector": "npm:pgvector@^0.2.0",
     "@worlds/sdk": "jsr:@worlds/sdk@^0.1.0",
