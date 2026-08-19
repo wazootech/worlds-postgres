@@ -10,7 +10,7 @@
     "jsr:@std/internal@^1.0.14": "1.0.14",
     "jsr:@std/path@^1.1.5": "1.1.6",
     "jsr:@wazoo/sparql-engine@~0.4.1": "0.4.1",
-    "jsr:@worlds/sdk@0.1": "0.1.0",
+    "jsr:@worlds/sdk@0.4": "0.4.0",
     "npm:@ai-sdk/google@^3.0.80": "3.0.91_zod@4.4.3",
     "npm:@langchain/core@^1.1.48": "1.2.2",
     "npm:@langchain/textsplitters@^1.0.1": "1.0.1_@langchain+core@1.2.2",
@@ -18,7 +18,7 @@
     "npm:@tensorflow/tfjs-backend-wasm@^4.22.0": "4.22.0_@tensorflow+tfjs-core@4.22.0",
     "npm:@tensorflow/tfjs@^4.22.0": "4.22.0_seedrandom@3.0.5",
     "npm:@types/n3@1.26.1": "1.26.1",
-    "npm:ai@^6.0.195": "6.0.222_zod@4.4.3",
+    "npm:ai@^6.0.195": "6.0.257_zod@4.4.3",
     "npm:n3@^2.0.3": "2.2.0",
     "npm:pgvector@0.2": "0.2.1",
     "npm:postgres@^3.4.5": "3.4.9",
@@ -66,27 +66,26 @@
         "npm:@rdfjs/types"
       ]
     },
-    "@worlds/sdk@0.1.0": {
-      "integrity": "f7888be19bf1fe72ba39ef5f67c69675599629a57077e0dcd4e0ebe7ac44d2cc",
+    "@worlds/sdk@0.4.0": {
+      "integrity": "8023123d43d800125c3130f3ef5a3ea4b4f498d48e6678934598a4aa3b8c93b7",
       "dependencies": [
         "jsr:@std/encoding",
         "jsr:@std/path",
+        "jsr:@wazoo/sparql-engine",
         "npm:@rdfjs/types",
         "npm:@tensorflow/tfjs",
         "npm:@tensorflow/tfjs-backend-wasm",
-        "npm:@types/n3",
         "npm:ai",
-        "npm:n3",
         "npm:rdf-canonize"
       ]
     }
   },
   "npm": {
-    "@ai-sdk/gateway@3.0.146_zod@4.4.3": {
-      "integrity": "sha512-QK922LzOfGeHdZ9QGvghDizQx/tPOolTQSHvMlnUPeaTW5qpiIqpfbLwYiyxEt5YOGLLM/0t232Dut+95udo/Q==",
+    "@ai-sdk/gateway@3.0.175_zod@4.4.3": {
+      "integrity": "sha512-fK5e5OtgjlpLio1M50ng+XKozPlBIKM/MKrlAIFyFfjC6gWWZaEh76e+OQPq7N0kkO/biVHyFXajxOtCN7YXQg==",
       "dependencies": [
-        "@ai-sdk/provider",
-        "@ai-sdk/provider-utils",
+        "@ai-sdk/provider@3.0.15",
+        "@ai-sdk/provider-utils@4.0.46_zod@4.4.3",
         "@vercel/oidc",
         "zod"
       ]
@@ -94,22 +93,38 @@
     "@ai-sdk/google@3.0.91_zod@4.4.3": {
       "integrity": "sha512-d/ho+sDjArFjreE2002t9jE4LXX3wde97dN2HCLCX1l41gaJV3wf/c/19axjUNfIf/4uUq+nJmhBO0lW/dg3yw==",
       "dependencies": [
-        "@ai-sdk/provider",
-        "@ai-sdk/provider-utils",
+        "@ai-sdk/provider@3.0.14",
+        "@ai-sdk/provider-utils@4.0.38_zod@4.4.3",
         "zod"
       ]
     },
     "@ai-sdk/provider-utils@4.0.38_zod@4.4.3": {
       "integrity": "sha512-/HHGmtKllqjg1OLc023v9w9kK3laW7Z6TzfZukYQWCsGBbzB9p60zTvvpXFVcs44NZBVXL3viOa1HRKUbeee8g==",
       "dependencies": [
-        "@ai-sdk/provider",
+        "@ai-sdk/provider@3.0.14",
         "@standard-schema/spec",
         "eventsource-parser",
         "zod"
       ]
     },
+    "@ai-sdk/provider-utils@4.0.46_zod@4.4.3": {
+      "integrity": "sha512-tEtld97plCFiYevsJuOkGkeuhQndeMWFBVrJS4AjnbD5AqrNSXRCe0p+BZ3Cju/sxDeeZ9ym3q9YUV8fASA7aQ==",
+      "dependencies": [
+        "@ai-sdk/provider@3.0.15",
+        "@standard-schema/spec",
+        "eventsource-parser",
+        "undici",
+        "zod"
+      ]
+    },
     "@ai-sdk/provider@3.0.14": {
       "integrity": "sha512-5X1k57JBJ4H7H1QjX7CnJYAB1I19r/trVZTMcSms7/kLNZ8RaU4Nt2agcwZzv82Hfx6Q7/TOLU7agAKeFfc8cA==",
+      "dependencies": [
+        "json-schema"
+      ]
+    },
+    "@ai-sdk/provider@3.0.15": {
+      "integrity": "sha512-XeZW1CcDF2GMbH4wejW6xBRI2QCOgnkVYUnxoeDadB1mf85riL2bMUeDoh+6gJ/r4mjNfzUPW8OjLjvwTP0u1Q==",
       "dependencies": [
         "json-schema"
       ]
@@ -272,12 +287,12 @@
         "event-target-shim"
       ]
     },
-    "ai@6.0.222_zod@4.4.3": {
-      "integrity": "sha512-kUzBaIHIfaDgBX7X22V4tE48MyYyS2IgCuj/zfANx0JfDAwgKwzKjl9pZUpYSnYPChI7i7yRGRoeTkebAFx1VQ==",
+    "ai@6.0.257_zod@4.4.3": {
+      "integrity": "sha512-ezz/d5KKHmYl96qk8JdU3JRZwO6tFfaXVtDYCQmSUkdHwyF+cnygL75xE0EiCCMgpnmAcJSaPWaz8oGGf6TsEA==",
       "dependencies": [
         "@ai-sdk/gateway",
-        "@ai-sdk/provider",
-        "@ai-sdk/provider-utils",
+        "@ai-sdk/provider@3.0.15",
+        "@ai-sdk/provider-utils@4.0.46_zod@4.4.3",
         "@opentelemetry/api",
         "zod"
       ]
@@ -604,6 +619,9 @@
     "undici-types@8.3.0": {
       "integrity": "sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ=="
     },
+    "undici@6.28.0": {
+      "integrity": "sha512-LIY910g9TI13YS95lrMFrs8Rm/u/irgHeTWoKCoteeJ04CUJ92eEfj0rVn+7VKMPBpUPiUoBKfhNyLI23EE/KA=="
+    },
     "webidl-conversions@3.0.1": {
       "integrity": "sha512-2JAn3z8AR6rjK8Sm8orRC0h/bcl/DqL7tRPdGZ4I1CjdF+EaMLmYxBHyXuKL849eucPFhvBoxMsflfOb8kxaeQ=="
     },
@@ -652,7 +670,7 @@
       "jsr:@std/fs@^1.0.24",
       "jsr:@std/path@^1.1.5",
       "jsr:@wazoo/sparql-engine@~0.4.1",
-      "jsr:@worlds/sdk@0.1",
+      "jsr:@worlds/sdk@0.4",
       "npm:@ai-sdk/google@^3.0.80",
       "npm:@langchain/core@^1.1.48",
       "npm:@langchain/textsplitters@^1.0.1",
