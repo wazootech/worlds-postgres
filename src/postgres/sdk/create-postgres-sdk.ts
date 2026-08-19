@@ -2,6 +2,7 @@ import type { SparqlEngineInterface } from "@wazoo/sparql-engine";
 import { WazooSparqlEngine } from "@wazoo/sparql-engine";
 import { Sdk, type SdkInterface } from "@worlds/sdk";
 import type { EmbeddingService } from "@worlds/sdk/search-index/embedding-service";
+import type { TextSplitterInterface } from "@worlds/sdk/search-index/quad-chunker";
 import { PostgresQuadStore } from "@/postgres/quad-store/mod.ts";
 import { PostgresSearchIndex } from "@/postgres/search-index/mod.ts";
 import { PostgresRdfjsStore } from "@/postgres/rdfjs-store/mod.ts";
@@ -40,6 +41,12 @@ export interface PostgresSdkOptions {
   ftsLanguage?: string;
 
   /**
+   * textSplitter slices long literal values into multiple chunk rows during
+   * reindex() (defaults to one chunk per textual literal).
+   */
+  textSplitter?: TextSplitterInterface;
+
+  /**
    * SPARQL engine to wire as the SDK's sparqlEngine. Defaults to a
    * WazooSparqlEngine over the store with its `createTransaction` hook, so
    * SPARQL updates commit atomically (one SQL transaction per update).
@@ -71,6 +78,7 @@ export async function createPostgresSdk(
     embeddingService: options.embeddingService,
     vectorDimensions: options.vectorDimensions,
     ftsLanguage: options.ftsLanguage,
+    textSplitter: options.textSplitter,
   });
   if (options.embeddingService) {
     await searchIndex.ensureSchema();

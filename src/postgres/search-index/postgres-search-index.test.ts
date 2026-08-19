@@ -6,6 +6,7 @@
  * ftsLanguage, and the keyword-parity scan — all against a live database.
  */
 import { assertAlmostEquals, assertEquals, assertRejects } from "@std/assert";
+import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { DataFactory } from "@wazoo/sparql-engine";
 import type { Quad } from "@rdfjs/types";
 import type { EmbeddingService } from "@worlds/sdk/search-index/embedding-service";
@@ -72,6 +73,23 @@ class KeywordEmbeddingService implements EmbeddingService {
         });
         return vector;
       }),
+    );
+  }
+}
+
+/**
+ * BipolarKeywordEmbeddingService projects each text to [1] when it contains
+ * the keyword and [-1] otherwise — non-zero, so every chunk stays indexed by
+ * the HNSW cosine index (pgvector skips zero vectors in HNSW scans).
+ */
+class BipolarKeywordEmbeddingService implements EmbeddingService {
+  public constructor(private readonly keyword: string) {}
+
+  public embed(texts: string[]): Promise<Array<number[]>> {
+    return Promise.resolve(
+      texts.map((text) => [
+        text.toLowerCase().includes(this.keyword) ? 1 : -1,
+      ]),
     );
   }
 }
@@ -492,6 +510,130 @@ Deno.test(
       const stemmed = hits(await index.search({ query: "bagel" }));
       assertEquals(stemmed.length, 1);
       assertAlmostEquals(stemmed[0]!.score, 1 / 61, 6);
+    } finally {
+      await close();
+    }
+  },
+);
+
+Deno.test(
+  "reindex splits long literals into multiple chunk rows via the textSplitter",
+  async () => {
+    const longText =
+      "Ethan researched the history of bagels across many regions and " +
+      "documented how boiling and baking change the texture of the dough " +
+      "over time in his notebook.";
+    const splitter = new RecursiveCharacterTextSplitter({
+      chunkSize: 30,
+      chunkOverlap: 0,
+    });
+    const expectedDocs = await splitter.createDocuments([longText]);
+    assertEquals(expectedDocs.length, 6);
+
+    const { sql, close } = await freshIndex({ vectorDimensions: 1 });
+    try {
+      await importQuads(sql, [
+        textQuad("ethan", "about", longText),
+        textQuad("gregory", "about", "Gregory prefers donuts"),
+      ]);
+
+      const splitIndex = new PostgresSearchIndex({
+        sql,
+        embeddingService: new BipolarKeywordEmbeddingService("bagel"),
+        vectorDimensions: 1,
+        textSplitter: splitter,
+      });
+      const report = await splitIndex.reindex({ readPageSize: 5 });
+      assertEquals(report.processedQuadCount, 2);
+      // 6 split pieces for Ethan's long literal + 1 for Gregory's.
+      assertEquals(report.chunkRowCount, 7);
+
+      const ethanRows = await sql.unsafe<{
+        id: string;
+        text: string;
+        embedding: string;
+      }>(
+        "SELECT id, text, embedding::text AS embedding " +
+          "FROM worlds_search_chunks WHERE subject = $1 ORDER BY id",
+        ["http://example.org/ethan"],
+      );
+      assertEquals(ethanRows.length, 6);
+      assertEquals(
+        ethanRows.map((row) => row.text),
+        expectedDocs.map((doc) => doc.pageContent),
+      );
+      // Every split piece is embedded; only the piece containing "bagels"
+      // gets [1], the rest [-1] (non-zero, so HNSW keeps indexing them).
+      assertEquals(
+        ethanRows.filter((row) => row.embedding === "[1]").length,
+        1,
+      );
+      assertEquals(
+        ethanRows.filter((row) => row.embedding === "[-1]").length,
+        5,
+      );
+
+      // Hybrid search returns a split piece (not the full literal); the
+      // piece containing "bagels" wins both branches at rank 1.
+      const bagelsDoc = expectedDocs.find((doc) =>
+        doc.pageContent.toLowerCase().includes("bagels")
+      )!;
+      const res = hits(await splitIndex.search({ query: "bagels" }));
+      assertEquals(res.length, 7);
+      assertEquals(res[0]!.text, bagelsDoc.pageContent);
+      assertAlmostEquals(res[0]!.score, 2 / 61, 6);
+    } finally {
+      await close();
+    }
+  },
+);
+
+Deno.test(
+  "reindex refresh clears stale chunk rows when the split changes",
+  async () => {
+    const longText =
+      "Ethan researched the history of bagels across many regions and " +
+      "documented how boiling and baking change the texture of the dough.";
+    const { sql, close } = await freshIndex();
+    try {
+      await importQuads(sql, [textQuad("ethan", "about", longText)]);
+
+      // Coarse split first.
+      const coarse = new RecursiveCharacterTextSplitter({
+        chunkSize: 60,
+        chunkOverlap: 0,
+      });
+      const coarseIndex = new PostgresSearchIndex({
+        sql,
+        textSplitter: coarse,
+      });
+      const coarseReport = await coarseIndex.reindex();
+      assertEquals(
+        coarseReport.chunkRowCount,
+        (await coarse.createDocuments([longText])).length,
+      );
+
+      // Finer split must replace the coarse rows, not accumulate.
+      const fine = new RecursiveCharacterTextSplitter({
+        chunkSize: 30,
+        chunkOverlap: 0,
+      });
+      const fineIndex = new PostgresSearchIndex({
+        sql,
+        textSplitter: fine,
+      });
+      const fineReport = await fineIndex.reindex();
+      const fineDocs = await fine.createDocuments([longText]);
+      assertEquals(fineReport.chunkRowCount, fineDocs.length);
+
+      const rows = await sql.unsafe<{ text: string }>(
+        "SELECT text FROM worlds_search_chunks ORDER BY id",
+      );
+      assertEquals(rows.length, fineDocs.length);
+      assertEquals(
+        rows.map((row) => row.text),
+        fineDocs.map((doc) => doc.pageContent),
+      );
     } finally {
       await close();
     }

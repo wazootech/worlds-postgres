@@ -62,10 +62,17 @@ const sdk = await createPostgresSdk({
   embeddingService: myEmbeddingService,
   vectorDimensions: 1536,
   ftsLanguage: "english",
+  textSplitter: new RecursiveCharacterTextSplitter({ chunkSize: 1000 }),
 });
 await sdk.reindex(); // populate chunk embeddings + tsvectors (keyset-paginated)
 const { results } = await sdk.search({ query: "hybrid query" });
 ```
+
+`reindex()` slices long literal values into chunk rows via the optional
+`textSplitter` (any `TextSplitterInterface`, e.g. LangChain's
+`RecursiveCharacterTextSplitter`) — each piece is embedded and FTS-indexed
+separately, consistent with `@worlds/libsql`. Without a splitter, one chunk row
+per textual literal is written (the identity default).
 
 ## Parity
 
