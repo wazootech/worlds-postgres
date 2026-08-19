@@ -20,8 +20,8 @@ deno add jsr:@worlds/postgres
 
 ## Usage
 
-The SDK factory assembles the full facade (quad store + keyword search +
-SPARQL engine) over a shared `postgres.Sql` surface:
+The SDK factory assembles the full facade (quad store + keyword search + SPARQL
+engine) over a shared `postgres.Sql` surface:
 
 ```typescript
 import postgres from "postgres";
