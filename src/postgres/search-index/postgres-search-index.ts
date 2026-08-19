@@ -8,8 +8,9 @@ import type {
 } from "@worlds/sdk/search-index";
 import { buildSearchResultId } from "@worlds/sdk/search-index";
 import type { EmbeddingService } from "@worlds/sdk/search-index/embedding-service";
+import type { TextSplitterInterface } from "@worlds/sdk/search-index/quad-chunker";
+import { chunkQuads } from "@worlds/sdk/search-index/quad-chunker";
 import type { QuadFilter } from "@worlds/sdk/quad-store";
-import { isTextualLiteral } from "@worlds/sdk/quad-store";
 import {
   fromQuadRow,
   type QuadRow,
@@ -31,6 +32,32 @@ const DEFAULT_HYBRID_TOP_K = 100;
 
 /** RRF rank-offset constant, consistent with @worlds/libsql's 1/(60 + rank). */
 const RRF_K = 60;
+
+/**
+ * Identity splitter: one chunk per textual literal, preserving the original
+ * reindex behavior when no textSplitter is configured. Pass a real splitter
+ * (e.g. LangChain's RecursiveCharacterTextSplitter) to break long literals
+ * into multiple chunk rows, consistent with @worlds/libsql.
+ */
+const IDENTITY_TEXT_SPLITTER: TextSplitterInterface = {
+  createDocuments(texts, metadatas) {
+    return Promise.resolve(
+      texts.map((text, index) => ({
+        pageContent: text,
+        metadata: metadatas?.[index],
+      })),
+    );
+  },
+};
+
+/**
+ * escapeLike escapes LIKE wildcards so a literal prefix match stays exact
+ * (chunk row ids embed content-hash quad ids).
+ */
+function escapeLike(value: string): string {
+  return value.replaceAll("\\", "\\\\").replaceAll("%", "\\%")
+    .replaceAll("_", "\\_");
+}
 
 /**
  * PostgresSearchIndexOptions defines configuration options for PostgresSearchIndex.
@@ -65,6 +92,14 @@ export interface PostgresSearchIndexOptions {
    * "english"). Must match the language the chunks table was created with.
    */
   ftsLanguage?: string;
+
+  /**
+   * textSplitter slices long literal values into multiple chunk rows during
+   * reindex() (each row embedded and FTS-indexed separately), consistent
+   * with @worlds/libsql. Defaults to an identity splitter (one chunk per
+   * textual literal, the original behavior).
+   */
+  textSplitter?: TextSplitterInterface;
 }
 
 /** HybridChunkRow is one fused search row from the chunks table. */
@@ -105,6 +140,7 @@ export class PostgresSearchIndex implements SearchIndexInterface {
   private readonly embeddingService?: EmbeddingService;
   private readonly vectorDimensions: number;
   private readonly ftsLanguage: string;
+  private readonly textSplitter: TextSplitterInterface;
 
   constructor(options: PostgresSearchIndexOptions) {
     this.sql = options.sql;
@@ -115,6 +151,7 @@ export class PostgresSearchIndex implements SearchIndexInterface {
     this.vectorDimensions = options.vectorDimensions ??
       DEFAULT_VECTOR_DIMENSION;
     this.ftsLanguage = options.ftsLanguage ?? "english";
+    this.textSplitter = options.textSplitter ?? IDENTITY_TEXT_SPLITTER;
     // Validate eagerly so a typo surfaces at construction, not at query time.
     quoteFtsLanguage(this.ftsLanguage);
     if (
@@ -503,10 +540,11 @@ export class PostgresSearchIndex implements SearchIndexInterface {
    * Rebuilds the search chunk table from durable quads in PostgreSQL —
    * the vector/hybrid seam (embedding + tsvector per chunk). Paginates
    * every quad with keyset paging over the ordered key columns (no quads
-   * skipped or duplicated across pages) and, when an embedding service is
-   * configured, populates each textual chunk's `embedding` column. Keyword
-   * search does not depend on this projection (it scans the live quads
-   * table), so reindex is optional for keyword parity.
+   * skipped or duplicated across pages), splits textual literals into chunk
+   * rows via the configured textSplitter (identity by default), and, when
+   * an embedding service is configured, populates each chunk's `embedding`
+   * column. Keyword search does not depend on this projection (it scans the
+   * live quads table), so reindex is optional for keyword parity.
    */
   async reindex(request?: ReindexRequest): Promise<ReindexResponse> {
     const pageSize = Math.max(1, Math.floor(request?.readPageSize ?? 1000));
@@ -549,13 +587,39 @@ export class PostgresSearchIndex implements SearchIndexInterface {
       const quads = rows.map((row) => fromQuadRow(row));
       processedQuadCount += quads.length;
 
-      const textualQuads = quads.filter((quad) =>
-        isTextualLiteral(quad.object)
-      );
+      // Split textual literals into chunk rows (the identity splitter yields
+      // one chunk per quad when no textSplitter is configured).
+      const chunks = await chunkQuads(quads, this.textSplitter);
+
+      // Refresh semantics (mirroring @worlds/libsql): clear this page's
+      // previous chunk rows first, so split changes never leave stale rows.
+      if (chunks.length > 0) {
+        const quadIds = Array.from(new Set(chunks.map((c) => c.quad_id)));
+        await this.sql.unsafe(
+          `DELETE FROM ${this.chunksTableName} WHERE id LIKE ANY($1::text[])`,
+          [quadIds.map((id) => `${escapeLike(id)}#%`)],
+        );
+      }
+
+      // Row id is `${quad_id}#<localIndex>` — unique per split piece and
+      // stable across reruns for a deterministic splitter.
+      const localIndexByQuad = new Map<string, number>();
+      const chunkRows = chunks.map((chunk) => {
+        const localIndex = localIndexByQuad.get(chunk.quad_id) ?? 0;
+        localIndexByQuad.set(chunk.quad_id, localIndex + 1);
+        return {
+          id: `${chunk.quad_id}#${localIndex}`,
+          graph: chunk.graph,
+          subject: chunk.subject,
+          predicate: chunk.predicate,
+          text: chunk.value,
+        };
+      });
+
       let vectors: Array<Float32Array | number[]> | undefined;
-      if (this.embeddingService && textualQuads.length > 0) {
+      if (this.embeddingService && chunkRows.length > 0) {
         vectors = await this.embeddingService.embed(
-          textualQuads.map((quad) => quad.object.value),
+          chunkRows.map((row) => row.text),
         );
         for (const vector of vectors) {
           if (vector.length !== this.vectorDimensions) {
@@ -567,13 +631,8 @@ export class PostgresSearchIndex implements SearchIndexInterface {
         }
       }
 
-      for (let i = 0; i < textualQuads.length; i++) {
-        const quad = textualQuads[i]!;
-        const id = [
-          quad.subject.value,
-          quad.predicate.value,
-          quad.object.value,
-        ].join(":");
+      for (let i = 0; i < chunkRows.length; i++) {
+        const row = chunkRows[i]!;
         const embedding = vectors?.[i];
         await this.sql.unsafe(
           `INSERT INTO ${this.chunksTableName} ` +
@@ -582,11 +641,11 @@ export class PostgresSearchIndex implements SearchIndexInterface {
             "ON CONFLICT (id) DO UPDATE SET " +
             "text = EXCLUDED.text, embedding = EXCLUDED.embedding",
           [
-            id,
-            quad.graph.value,
-            quad.subject.value,
-            quad.predicate.value,
-            quad.object.value,
+            row.id,
+            row.graph,
+            row.subject,
+            row.predicate,
+            row.text,
             embedding ? JSON.stringify(Array.from(embedding)) : null,
           ],
         );
