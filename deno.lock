@@ -12,6 +12,7 @@
     "jsr:@wazoo/sparql-engine@~0.4.1": "0.4.1",
     "jsr:@worlds/sdk@0.4": "0.4.0",
     "npm:@ai-sdk/google@^3.0.80": "3.0.91_zod@4.4.3",
+    "npm:@electric-sql/pglite@0.3": "0.3.16",
     "npm:@langchain/core@^1.1.48": "1.2.2",
     "npm:@langchain/textsplitters@^1.0.1": "1.0.1_@langchain+core@1.2.2",
     "npm:@rdfjs/types@^2.0.1": "2.0.1",
@@ -131,6 +132,9 @@
     },
     "@cfworker/json-schema@4.1.1": {
       "integrity": "sha512-gAmrUZSGtKc3AiBL71iNWxDsyUC5uMaKKGdvzYsBoTW/xi42JQHl7eKV2OYzCUqvc+D2RCcf7EXY2iCyFIk6og=="
+    },
+    "@electric-sql/pglite@0.3.16": {
+      "integrity": "sha512-mZkZfOd9OqTMHsK+1cje8OSzfAQcpD7JmILXTl5ahdempjUDdmg4euf1biDex5/LfQIDJ3gvCu6qDgdnDxfJmA=="
     },
     "@langchain/core@1.2.2": {
       "integrity": "sha512-KfjEOT6sCg0vvItagfEtGpmrGoLMGfma4Affb5BGEqPmS2YR3AxW54pABSkhQlzCehTB+0BnLquAe1lGF4J9zQ==",
@@ -672,6 +676,7 @@
       "jsr:@wazoo/sparql-engine@~0.4.1",
       "jsr:@worlds/sdk@0.4",
       "npm:@ai-sdk/google@^3.0.80",
+      "npm:@electric-sql/pglite@0.3",
       "npm:@langchain/core@^1.1.48",
       "npm:@langchain/textsplitters@^1.0.1",
       "npm:@rdfjs/types@^2.0.1",
