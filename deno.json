@@ -1,6 +1,6 @@
 {
   "name": "@worlds/postgres",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "MIT",
   "nodeModulesDir": "auto",
   "exports": {
@@ -8,6 +8,7 @@
     "./quad-store": "./src/postgres/quad-store/mod.ts",
     "./search-index": "./src/postgres/search-index/mod.ts",
     "./rdfjs-store": "./src/postgres/rdfjs-store/mod.ts",
+    "./sdk": "./src/postgres/sdk/mod.ts",
     "./schema": "./src/postgres/schema/postgres-schema-builder.ts"
   },
   "imports": {
@@ -15,7 +16,10 @@
     "ai": "npm:ai@^6.0.195",
     "@ai-sdk/google": "npm:@ai-sdk/google@^3.0.80",
     "@rdfjs/types": "npm:@rdfjs/types@^2.0.1",
+    "@electric-sql/pglite": "npm:@electric-sql/pglite@^0.3.0",
+    "@electric-sql/pglite/vector": "npm:@electric-sql/pglite@^0.3.0/vector",
     "@wazoo/sparql-engine": "jsr:@wazoo/sparql-engine@^0.4.1",
+    "@worlds/sdk/rdfjs": "jsr:@worlds/sdk@^0.4.0/rdfjs",
     "postgres": "npm:postgres@^3.4.5",
     "pgvector": "npm:pgvector@^0.2.0",
     "@worlds/sdk": "jsr:@worlds/sdk@^0.4.0",

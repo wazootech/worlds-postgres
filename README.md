@@ -20,12 +20,31 @@ deno add jsr:@worlds/postgres
 
 ## Usage
 
+The SDK factory assembles the full facade (quad store + keyword search +
+SPARQL engine) over a shared `postgres.Sql` surface:
+
 ```typescript
 import postgres from "postgres";
+import { createPostgresSdk } from "@worlds/postgres/sdk";
+
+const sql = postgres("postgres://localhost/worlds");
+const sdk = await createPostgresSdk({ sql });
+```
+
+Reference subpaths mirror the other Worlds backends:
+
+```typescript
 import { PostgresQuadStore } from "@worlds/postgres/quad-store";
 import { PostgresSearchIndex } from "@worlds/postgres/search-index";
 import { PostgresRdfjsStore } from "@worlds/postgres/rdfjs-store";
 ```
+
+## Parity
+
+`deno task ci` runs a full-corpus parity suite (`runParitySuite` from
+`@worlds/sdk/testing`) comparing `createPostgresSdk` against the portable
+in-memory reference (`@worlds/sdk/memory`) over PGlite — search ordering is
+compared set-wise, since SQL keyword-scan order is not a parity contract.
 
 ## Development
 
