@@ -1,6 +1,7 @@
 import type { SparqlEngineInterface } from "@wazoo/sparql-engine";
 import { WazooSparqlEngine } from "@wazoo/sparql-engine";
 import { Sdk, type SdkInterface } from "@worlds/sdk";
+import type { EmbeddingService } from "@worlds/sdk/search-index/embedding-service";
 import { PostgresQuadStore } from "@/postgres/quad-store/mod.ts";
 import { PostgresSearchIndex } from "@/postgres/search-index/mod.ts";
 import { PostgresRdfjsStore } from "@/postgres/rdfjs-store/mod.ts";
@@ -18,6 +19,25 @@ export interface PostgresSdkOptions {
 
   /** Table name for search chunks (defaults to "worlds_search_chunks"). */
   searchChunksTableName?: string;
+
+  /**
+   * embeddingService enables hybrid RRF search. When set, the SDK ensures
+   * the search chunks schema and search() fuses a tsvector keyword branch
+   * with a pgvector cosine branch over reindexed chunks (1/(60 + rank)).
+   */
+  embeddingService?: EmbeddingService;
+
+  /**
+   * vectorDimensions pins the chunk embedding width (default 1536) and
+   * validates every embedding produced by embeddingService.
+   */
+  vectorDimensions?: number;
+
+  /**
+   * ftsLanguage is the regconfig for the chunks table's generated tsvector
+   * and hybrid keyword queries (default "english").
+   */
+  ftsLanguage?: string;
 
   /**
    * SPARQL engine to wire as the SDK's sparqlEngine. Defaults to a
@@ -44,6 +64,17 @@ export async function createPostgresSdk(
     tableName: options.tableName,
   });
   await store.ensureSchema();
+  const searchIndex = new PostgresSearchIndex({
+    sql: options.sql,
+    quadsTableName: options.tableName,
+    searchChunksTableName: options.searchChunksTableName,
+    embeddingService: options.embeddingService,
+    vectorDimensions: options.vectorDimensions,
+    ftsLanguage: options.ftsLanguage,
+  });
+  if (options.embeddingService) {
+    await searchIndex.ensureSchema();
+  }
   return new Sdk({
     quadStore: new PostgresQuadStore({
       sql: options.sql,
@@ -54,10 +85,6 @@ export async function createPostgresSdk(
         store,
         createTransaction: () => store.createTransaction(),
       }),
-    searchIndex: new PostgresSearchIndex({
-      sql: options.sql,
-      quadsTableName: options.tableName,
-      searchChunksTableName: options.searchChunksTableName,
-    }),
+    searchIndex,
   });
 }

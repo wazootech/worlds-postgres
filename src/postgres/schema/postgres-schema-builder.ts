@@ -8,6 +8,27 @@ export interface PostgresSchemaOptions {
   searchChunksTableName?: string;
   /** Vector dimension size for pgvector embeddings (default: 1536) */
   vectorDimension?: number;
+  /**
+   * Full-text search language (regconfig) for the chunks table's generated
+   * tsvector and hybrid keyword queries (default: "english"). Accepts any
+   * regconfig name Postgres can resolve, e.g. "simple", "spanish".
+   */
+  ftsLanguage?: string;
+}
+
+/**
+ * quoteFtsLanguage validates a regconfig name and returns it as a SQL string
+ * literal (e.g. `'english'`). Only simple identifier characters are accepted,
+ * so the value can never break out of the literal.
+ */
+export function quoteFtsLanguage(language: string): string {
+  if (!/^[A-Za-z0-9_.]+$/.test(language)) {
+    throw new Error(
+      `invalid ftsLanguage ${JSON.stringify(language)}: ` +
+        "must be a simple regconfig name (letters, digits, '_', '.')",
+    );
+  }
+  return `'${language}'`;
 }
 
 /**
@@ -27,6 +48,7 @@ export function buildPostgresSchemaSql(
   const quadsTable = options.quadsTableName ?? "worlds_quads";
   const chunksTable = options.searchChunksTableName ?? "worlds_search_chunks";
   const dimension = options.vectorDimension ?? 1536;
+  const ftsLanguage = quoteFtsLanguage(options.ftsLanguage ?? "english");
 
   return `
 -- Enable pgvector extension
@@ -55,7 +77,7 @@ CREATE TABLE IF NOT EXISTS ${chunksTable} (
   predicate TEXT NOT NULL,
   text TEXT NOT NULL,
   embedding vector(${dimension}),
-  tsv tsvector GENERATED ALWAYS AS (to_tsvector('english', text)) STORED
+  tsv tsvector GENERATED ALWAYS AS (to_tsvector(${ftsLanguage}, text)) STORED
 );
 
 -- HNSW vector similarity index for cosine distance

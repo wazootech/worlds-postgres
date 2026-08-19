@@ -39,6 +39,34 @@ import { PostgresSearchIndex } from "@worlds/postgres/search-index";
 import { PostgresRdfjsStore } from "@worlds/postgres/rdfjs-store";
 ```
 
+## Hybrid search
+
+`PostgresSearchIndex.search` has two modes:
+
+- **Keyword-only** (no embedding service): the reference's exact keyword
+  semantics — case-insensitive substring over textual literals in the live quads
+  table. This is the parity path.
+- **Hybrid** (embedding service configured): Reciprocal Rank Fusion over the
+  reindexed chunks table — a tsvector keyword branch
+  (`to_tsvector`/`plainto_tsquery` in the configured `ftsLanguage`, default
+  `"english"`) and a pgvector cosine branch, each ranked 1..topK and fused as
+  `1/(60 + rank)` summed, consistent with `@worlds/libsql`. A query-time
+  embedding failure degrades to the keyword branch; an empty query runs the
+  vector branch alone.
+
+```typescript
+import { createPostgresSdk } from "@worlds/postgres/sdk";
+
+const sdk = await createPostgresSdk({
+  sql,
+  embeddingService: myEmbeddingService,
+  vectorDimensions: 1536,
+  ftsLanguage: "english",
+});
+await sdk.reindex(); // populate chunk embeddings + tsvectors (keyset-paginated)
+const { results } = await sdk.search({ query: "hybrid query" });
+```
+
 ## Parity
 
 `deno task ci` runs a full-corpus parity suite (`runParitySuite` from
