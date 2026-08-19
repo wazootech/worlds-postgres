@@ -64,7 +64,6 @@ function escapeLike(value: string): string {
  */
 export interface PostgresSearchIndexOptions {
   sql: PostgresSql;
-  tableName?: string;
   quadsTableName?: string;
   searchChunksTableName?: string;
 
