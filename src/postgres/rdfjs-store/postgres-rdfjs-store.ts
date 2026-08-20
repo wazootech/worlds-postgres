@@ -3,7 +3,7 @@
  *
  * The PostgreSQL quad primitive for the Worlds ecosystem, packaged with the
  * worlds impl per the agreed pattern (`SqliteStore` in `@worlds/sqlite`,
- * `IndexedDbStore` in `@worlds/indexeddb`, `LibsqlRdfjsStore` in
+ * `IndexeddbStore` in `@worlds/indexeddb`, `LibsqlRdfjsStore` in
  * `@worlds/libsql`).
  *
  * Layout (mirrors the sqlite/indexeddb shape 1:1):
