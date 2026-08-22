@@ -1,8 +1,8 @@
 /**
  * Phase-4 parity suite (workspace#65, #72) — consumes the shared
  * @worlds/sdk/testing harness with the zero-dependency in-memory reference
- * (@worlds/sdk/memory's createMemorySdk) against the postgres SDK facade
- * (createPostgresSdk over the real PostgresRdfjsStore, PGlite substrate).
+ * (@worlds/sdk/memory's createMemoryWorldsSdk) against the postgres SDK facade
+ * (createPostgresWorldsSdk over the real PostgresRdfjsStore, PGlite substrate).
  *
  * Every candidate factory call gets a fresh in-memory PGlite instance, so
  * no state leaks between cases or between the round-trip's two stores.
@@ -13,22 +13,22 @@
  */
 import { assertEquals } from "@std/assert";
 import { parityCorpus, runParitySuite } from "@worlds/sdk/testing";
-import { createMemorySdk } from "@worlds/sdk/memory";
-import type { SdkInterface } from "@worlds/sdk";
-import { createPostgresSdk } from "@/postgres/sdk/mod.ts";
+import { createMemoryWorldsSdk } from "@worlds/sdk/memory";
+import type { WorldsSdkInterface } from "@worlds/sdk";
+import { createPostgresWorldsSdk } from "@/postgres/sdk/mod.ts";
 import { createPGliteSql } from "@/postgres/sql/pglite-adapter.ts";
 
-async function createFreshPostgresSdk(): Promise<SdkInterface> {
+async function createFreshPostgresWorldsSdk(): Promise<WorldsSdkInterface> {
   const sql = await createPGliteSql();
-  return await createPostgresSdk({ sql });
+  return await createPostgresWorldsSdk({ sql });
 }
 
 Deno.test(
   "parity suite - @worlds/postgres agrees with the in-memory reference on the full corpus",
   async () => {
     const report = await runParitySuite({
-      reference: () => createMemorySdk(),
-      candidate: () => createFreshPostgresSdk(),
+      reference: () => createMemoryWorldsSdk(),
+      candidate: () => createFreshPostgresWorldsSdk(),
       strictSearchOrder: false,
     });
 

@@ -30,7 +30,7 @@ npx jsr add @worlds/postgres
 bundler needed.
 
 ```js
-import { createPostgresSdk } from "https://esm.sh/jsr/@worlds/postgres@0.2.0";
+import { createPostgresWorldsSdk } from "https://esm.sh/jsr/@worlds/postgres@0.2.0";
 ```
 
 With an import map:
@@ -44,14 +44,14 @@ With an import map:
 }
 </script>
 <script type="module">
-  import { createPostgresSdk } from "@worlds/postgres";
+  import { createPostgresWorldsSdk } from "@worlds/postgres";
 </script>
 ```
 
 Pin to an exact build for deterministic caching:
 
 ```js
-import { createPostgresSdk } from "https://esm.sh/jsr/@worlds/postgres@0.2.0?pin=v1724100000";
+import { createPostgresWorldsSdk } from "https://esm.sh/jsr/@worlds/postgres@0.2.0?pin=v1724100000";
 ```
 
 ## Usage
@@ -61,10 +61,10 @@ engine) over a shared `postgres.Sql` surface:
 
 ```typescript
 import postgres from "postgres";
-import { createPostgresSdk } from "@worlds/postgres/sdk";
+import { createPostgresWorldsSdk } from "@worlds/postgres/sdk";
 
 const sql = postgres("postgres://localhost/worlds");
-const sdk = await createPostgresSdk({ sql });
+const sdk = await createPostgresWorldsSdk({ sql });
 ```
 
 Reference subpaths mirror the other Worlds backends:
@@ -91,9 +91,9 @@ import { PostgresRdfjsStore } from "@worlds/postgres/rdfjs-store";
   vector branch alone.
 
 ```typescript
-import { createPostgresSdk } from "@worlds/postgres/sdk";
+import { createPostgresWorldsSdk } from "@worlds/postgres/sdk";
 
-const sdk = await createPostgresSdk({
+const sdk = await createPostgresWorldsSdk({
   sql,
   embeddingService: myEmbeddingService,
   vectorDimensions: 1536,
@@ -113,7 +113,7 @@ per textual literal is written (the identity default).
 ## Parity
 
 `deno task ci` runs a full-corpus parity suite (`runParitySuite` from
-`@worlds/sdk/testing`) comparing `createPostgresSdk` against the portable
+`@worlds/sdk/testing`) comparing `createPostgresWorldsSdk` against the portable
 in-memory reference (`@worlds/sdk/memory`) over PGlite — search ordering is
 compared set-wise, since SQL keyword-scan order is not a parity contract.
 

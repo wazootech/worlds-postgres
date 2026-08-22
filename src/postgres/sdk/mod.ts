@@ -1,2 +1,2 @@
-export { createPostgresSdk } from "./create-postgres-sdk.ts";
-export type { PostgresSdkOptions } from "./create-postgres-sdk.ts";
+export { createPostgresWorldsSdk } from "./create-postgres-sdk.ts";
+export type { PostgresWorldsSdkOptions } from "./create-postgres-sdk.ts";

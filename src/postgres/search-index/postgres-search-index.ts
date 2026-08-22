@@ -506,7 +506,7 @@ export class PostgresSearchIndex implements SearchIndexInterface {
   /**
    * ensureSchema creates the search chunks table (pgvector embedding column,
    * generated tsvector in the configured ftsLanguage, HNSW cosine index, GIN
-   * tsvector index) — idempotent. Called by createPostgresSdk when an
+   * tsvector index) — idempotent. Called by createPostgresWorldsSdk when an
    * embedding service is configured; direct users must run it (or the shared
    * schema builder) before hybrid search or reindex.
    */
