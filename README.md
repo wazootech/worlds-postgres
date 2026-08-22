@@ -14,8 +14,44 @@ Standalone PostgreSQL quad store and search index package extracted for the
 
 ## Install
 
-```bash
+### Package managers
+
+```sh
+# Deno (first-class JSR support)
 deno add jsr:@worlds/postgres
+
+# Bun / npm / pnpm / Yarn (via JSR npm compatibility layer)
+npx jsr add @worlds/postgres
+```
+
+### CDN (browser / no build step)
+
+[esm.sh](https://esm.sh) serves JSR packages as ES modules — no install, no
+bundler needed.
+
+```js
+import { createPostgresSdk } from "https://esm.sh/jsr/@worlds/postgres@0.2.0";
+```
+
+With an import map:
+
+```html
+<script type="importmap">
+{
+  "imports": {
+    "@worlds/postgres": "https://esm.sh/jsr/@worlds/postgres@0.2.0"
+  }
+}
+</script>
+<script type="module">
+import { createPostgresSdk } from "@worlds/postgres";
+</script>
+```
+
+Pin to an exact build for deterministic caching:
+
+```js
+import { createPostgresSdk } from "https://esm.sh/jsr/@worlds/postgres@0.2.0?pin=v1724100000";
 ```
 
 ## Usage
