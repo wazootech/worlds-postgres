@@ -1,6 +1,6 @@
 import type { SparqlEngineInterface } from "@wazoo/sparql-engine";
 import { WazooSparqlEngine } from "@wazoo/sparql-engine";
-import { Sdk, type SdkInterface } from "@worlds/sdk";
+import { WorldsSdk, type WorldsSdkInterface } from "@worlds/sdk";
 import type { EmbeddingService } from "@worlds/sdk/search-index/embedding-service";
 import type { TextSplitterInterface } from "@worlds/sdk/search-index/quad-chunker";
 import { PostgresQuadStore } from "@/postgres/quad-store/mod.ts";
@@ -9,9 +9,9 @@ import { PostgresRdfjsStore } from "@/postgres/rdfjs-store/mod.ts";
 import type { PostgresSql } from "@/postgres/sql/postgres-sql.ts";
 
 /**
- * PostgresSdkOptions configures createPostgresSdk.
+ * PostgresWorldsSdkOptions configures createPostgresWorldsSdk.
  */
-export interface PostgresSdkOptions {
+export interface PostgresWorldsSdkOptions {
   /** sql is the SQL surface (postgres.js Sql or the PGlite adapter). */
   sql: PostgresSql;
 
@@ -55,7 +55,7 @@ export interface PostgresSdkOptions {
 }
 
 /**
- * createPostgresSdk assembles a Worlds SDK facade over a PostgreSQL-backed
+ * createPostgresWorldsSdk assembles a Worlds SDK facade over a PostgreSQL-backed
  * quad store: the dedicated PostgresQuadStore (imports persist through the
  * store's applyPatch, one SQL transaction per import), the dedicated
  * PostgresSearchIndex (SQL keyword scan with the reference's exact matching
@@ -63,9 +63,9 @@ export interface PostgresSdkOptions {
  * createTransaction hook. The quads table (and its secondary indexes) is
  * ensured on construction.
  */
-export async function createPostgresSdk(
-  options: PostgresSdkOptions,
-): Promise<SdkInterface> {
+export async function createPostgresWorldsSdk(
+  options: PostgresWorldsSdkOptions,
+): Promise<WorldsSdkInterface> {
   const store = new PostgresRdfjsStore({
     sql: options.sql,
     tableName: options.tableName,
@@ -83,7 +83,7 @@ export async function createPostgresSdk(
   if (options.embeddingService) {
     await searchIndex.ensureSchema();
   }
-  return new Sdk({
+  return new WorldsSdk({
     quadStore: new PostgresQuadStore({
       sql: options.sql,
       tableName: options.tableName,
