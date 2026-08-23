@@ -7,7 +7,7 @@
  * vector` works for the vector search chunk table.
  */
 import { PGlite, type PGliteOptions } from "@electric-sql/pglite";
-import { vector } from "@electric-sql/pglite/vector";
+import { vector } from "@electric-sql/pglite-pgvector";
 import type { PostgresSql } from "@/postgres/sql/postgres-sql.ts";
 
 /** PGliteSql implements PostgresSql over a PGlite instance. */
