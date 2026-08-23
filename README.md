@@ -44,7 +44,7 @@ With an import map:
 }
 </script>
 <script type="module">
-  import { createPostgresWorldsSdk } from "@worlds/postgres";
+import { createPostgresWorldsSdk } from "@worlds/postgres";
 </script>
 ```
 
