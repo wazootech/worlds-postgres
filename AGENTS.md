@@ -16,7 +16,7 @@ this repo's specifics:
 - Before pushing, run `deno task ci` (fmt check, lint, type check, tests).
 - Deno type checking is strict by default; do not weaken it.
 - The single `deno-lint-ignore no-explicit-any` in
-  `src/postgres/rdfjs-store/pg-quad-stream.ts` covers a commented EventEmitter
+  `src/postgres/rdfjs-store/pg-event-emitter.ts` covers a commented EventEmitter
   listener type; keep its explanatory comment and add no new `any` without one.
 - Actions in `.github/workflows/` are pinned to full commit SHAs, CI pins Deno
   to `v2.9.8`, and installs are frozen (`deno ci`).

@@ -4,34 +4,21 @@ import type {
   SearchIndexInterface,
   SearchRequest,
   SearchResponse,
-  SearchResult,
 } from "@worlds/sdk/search-index";
-import { buildSearchResultId } from "@worlds/sdk/search-index";
 import type { EmbeddingService } from "@worlds/sdk/search-index/embedding-service";
 import type { TextSplitterInterface } from "@worlds/sdk/search-index/quad-chunker";
-import { chunkQuads } from "@worlds/sdk/search-index/quad-chunker";
-import type { QuadFilter } from "@worlds/sdk/quad-store";
-import {
-  fromQuadRow,
-  type QuadRow,
-} from "@/postgres/rdfjs-store/quad-record.ts";
 import { quoteFtsLanguage } from "@/postgres/schema/postgres-schema-builder.ts";
 import type { PostgresSql } from "@/postgres/sql/postgres-sql.ts";
-
-const XSD_STRING = "http://www.w3.org/2001/XMLSchema#string";
-const RDF_LANGSTRING = "http://www.w3.org/1999/02/22-rdf-syntax-ns#langString";
+import { ensureSearchChunksTable } from "./postgres-search-chunks-ddl.ts";
+import { hybridSearch, keywordScanSearch } from "./postgres-search-queries.ts";
+import { reindexChunks } from "./postgres-search-reindex.ts";
+import type { PostgresSearchContext } from "./postgres-search-types.ts";
 
 /** Default vector dimension for the search chunks table (matches the schema). */
 const DEFAULT_VECTOR_DIMENSION = 1536;
 
 /** Maximum supported vector dimension (matches the schema builder's default cap). */
 const MAX_VECTOR_DIMENSION = 1536;
-
-/** Default search result limit for the hybrid path (mirrors @worlds/libsql). */
-const DEFAULT_HYBRID_TOP_K = 100;
-
-/** RRF rank-offset constant, consistent with @worlds/libsql's 1/(60 + rank). */
-const RRF_K = 60;
 
 /**
  * Identity splitter: one chunk per textual literal, preserving the original
@@ -49,15 +36,6 @@ const IDENTITY_TEXT_SPLITTER: TextSplitterInterface = {
     );
   },
 };
-
-/**
- * escapeLike escapes LIKE wildcards so a literal prefix match stays exact
- * (chunk row ids embed content-hash quad ids).
- */
-function escapeLike(value: string): string {
-  return value.replaceAll("\\", "\\\\").replaceAll("%", "\\%")
-    .replaceAll("_", "\\_");
-}
 
 /**
  * PostgresSearchIndexOptions defines configuration options for PostgresSearchIndex.
@@ -99,15 +77,6 @@ export interface PostgresSearchIndexOptions {
    * textual literal, the original behavior).
    */
   textSplitter?: TextSplitterInterface;
-}
-
-/** HybridChunkRow is one fused search row from the chunks table. */
-interface HybridChunkRow {
-  subject: string;
-  predicate: string;
-  graph: string;
-  text: string;
-  combined_rank: string | number;
 }
 
 /**
@@ -165,6 +134,19 @@ export class PostgresSearchIndex implements SearchIndexInterface {
     }
   }
 
+  /** context exposes the resolved settings to the extracted helpers. */
+  private get context(): PostgresSearchContext {
+    return {
+      sql: this.sql,
+      tableName: this.tableName,
+      chunksTableName: this.chunksTableName,
+      embeddingService: this.embeddingService,
+      vectorDimensions: this.vectorDimensions,
+      ftsLanguage: this.ftsLanguage,
+      textSplitter: this.textSplitter,
+    };
+  }
+
   /**
    * Performs keyword search across PostgreSQL quads with the reference's
    * exact matching semantics: textual literals only (xsd:string and
@@ -177,330 +159,9 @@ export class PostgresSearchIndex implements SearchIndexInterface {
    */
   async search(request: SearchRequest): Promise<SearchResponse> {
     if (this.embeddingService) {
-      return await this.hybridSearch(request);
+      return await hybridSearch(this.context, request);
     }
-    return await this.keywordScanSearch(request);
-  }
-
-  /**
-   * keywordScanSearch is the parity keyword path: a SQL scan over the live
-   * quads table matching the reference's exact substring semantics.
-   */
-  private async keywordScanSearch(
-    request: SearchRequest,
-  ): Promise<SearchResponse> {
-    const query = request.query;
-    const where: string[] = [
-      `payload->'o'->>'t' = 'L'`,
-      `payload->'o'->>'dt' IN ($1, $2)`,
-    ];
-    const params: string[] = [XSD_STRING, RDF_LANGSTRING];
-    const bind = (value: string): string => {
-      params.push(value);
-      return `$${params.length}`;
-    };
-
-    // Case-insensitive substring, escaping LIKE wildcards so the query is
-    // treated literally (matching the reference's String.includes).
-    const escaped = query.replaceAll("\\", "\\\\").replaceAll("%", "\\%")
-      .replaceAll("_", "\\_");
-    where.push(
-      `lower(payload->'o'->>'v') LIKE '%' || lower(${
-        bind(escaped)
-      }) || '%' ESCAPE '\\'`,
-    );
-
-    const scoping = this.filterSql(bind, request.include, request.exclude);
-    where.push(...scoping.where);
-
-    const sqlText = `SELECT payload FROM ${this.tableName}` +
-      ` WHERE ${where.join(" AND ")}`;
-    const rows = await this.sql.unsafe<{ payload: string }>(sqlText, params);
-
-    const results: SearchResult[] = [];
-    for (const row of rows) {
-      const quad = fromQuadRow({ payload: row.payload });
-      const text = quad.object.value;
-      const base = {
-        subject: quad.subject.value,
-        predicate: quad.predicate.value,
-        graph: quad.graph.value,
-        text,
-      };
-      results.push({
-        id: await buildSearchResultId(base),
-        ...base,
-        score: 1.0,
-      });
-    }
-    return { results };
-  }
-
-  /**
-   * hybridSearch fuses a tsvector keyword branch and a pgvector cosine
-   * branch over the reindexed chunks table with Reciprocal Rank Fusion
-   * (`1/(60 + rank)` summed), consistent with @worlds/libsql. An embedding
-   * failure degrades to the keyword branch alone; an empty query runs the
-   * vector branch alone. Requires the chunks table (see ensureSchema).
-   */
-  private async hybridSearch(request: SearchRequest): Promise<SearchResponse> {
-    let vectorJson: string | undefined;
-    if (this.embeddingService) {
-      try {
-        const [vector] = await this.embeddingService.embed([request.query]);
-        if (vector.length !== this.vectorDimensions) {
-          throw new Error(
-            `query embedding length ${vector.length} does not match ` +
-              `vectorDimensions ${this.vectorDimensions}`,
-          );
-        }
-        vectorJson = JSON.stringify(Array.from(vector));
-      } catch (error) {
-        // Gracefully degrade to keyword-only search if the embedding
-        // service fails, mirroring @worlds/libsql.
-        console.warn(
-          `[Search Warning] Embedding service failure. Degrading to ` +
-            `keyword-only search fallback. Reason: ${(error as Error).message}`,
-        );
-      }
-    }
-
-    const { sql, params } = this.buildHybridQuery(request, { vectorJson });
-    const rows = await this.sql.unsafe<HybridChunkRow>(sql, params);
-
-    const minScore = request.minScore ?? 0;
-    const results: SearchResult[] = [];
-    for (const row of rows) {
-      const score = Number(row.combined_rank);
-      if (score < minScore) continue;
-      const base = {
-        subject: row.subject,
-        predicate: row.predicate,
-        graph: row.graph,
-        text: row.text,
-      };
-      results.push({
-        id: await buildSearchResultId(base),
-        ...base,
-        score,
-      });
-    }
-    return { results };
-  }
-
-  /**
-   * buildHybridQuery assembles the RRF fusion SQL over the chunks table,
-   * mirroring @worlds/libsql's buildSearchQuery structure: ranked keyword
-   * matches, ranked vector neighbors, a FULL OUTER JOIN fused by chunk id,
-   * QuadFilter scoping on the chunk columns, and a final topK cut.
-   */
-  private buildHybridQuery(
-    request: SearchRequest,
-    options: { vectorJson?: string },
-  ): { sql: string; params: unknown[] } {
-    const params: unknown[] = [];
-    const bind = (value: unknown): string => {
-      params.push(value);
-      return `$${params.length}`;
-    };
-
-    const limit = Math.max(1, Math.floor(request.topK ?? DEFAULT_HYBRID_TOP_K));
-    const hasKeyword = request.query.trim().length > 0;
-    const hasVector = !!options.vectorJson;
-
-    const scoping = this.chunkFilterSql(bind, request.include, request.exclude);
-    const filterClause = scoping.where.length > 0
-      ? `WHERE ${scoping.where.join(" AND ")}`
-      : "";
-
-    if (hasVector && hasKeyword) {
-      const langParam = bind(this.ftsLanguage);
-      const queryParam = bind(request.query);
-      const ftsLimit = bind(limit);
-      const vecParam = bind(options.vectorJson);
-      const vecLimit = bind(limit);
-      const finalLimit = bind(limit);
-      const sql = `
-        WITH fts_matches AS (
-          SELECT id,
-            row_number() OVER (
-              ORDER BY ts_rank_cd(tsv, plainto_tsquery(${langParam}::regconfig, ${queryParam})) DESC
-            ) AS rank_number
-          FROM ${this.chunksTableName}
-          WHERE tsv @@ plainto_tsquery(${langParam}::regconfig, ${queryParam})
-          LIMIT ${ftsLimit}
-        ), vec_matches AS (
-          SELECT id,
-            row_number() OVER (ORDER BY embedding <=> ${vecParam}::vector) AS rank_number
-          FROM ${this.chunksTableName}
-          ORDER BY embedding <=> ${vecParam}::vector
-          LIMIT ${vecLimit}
-        ), fused AS (
-          SELECT c.subject, c.predicate, c.graph, c.text,
-            (COALESCE(1.0 / (${RRF_K} + fts_matches.rank_number), 0.0) +
-             COALESCE(1.0 / (${RRF_K} + vec_matches.rank_number), 0.0)) AS combined_rank
-          FROM fts_matches
-          FULL OUTER JOIN vec_matches ON vec_matches.id = fts_matches.id
-          JOIN ${this.chunksTableName} c ON c.id = COALESCE(fts_matches.id, vec_matches.id)
-          ${filterClause}
-          ORDER BY combined_rank DESC
-          LIMIT ${finalLimit}
-        )
-        SELECT * FROM fused`;
-      return { sql, params };
-    }
-
-    if (hasVector) {
-      const vecParam = bind(options.vectorJson);
-      const vecLimit = bind(limit);
-      const finalLimit = bind(limit);
-      const sql = `
-        WITH vec_matches AS (
-          SELECT id,
-            row_number() OVER (ORDER BY embedding <=> ${vecParam}::vector) AS rank_number
-          FROM ${this.chunksTableName}
-          ORDER BY embedding <=> ${vecParam}::vector
-          LIMIT ${vecLimit}
-        ), fused AS (
-          SELECT c.subject, c.predicate, c.graph, c.text,
-            COALESCE(1.0 / (${RRF_K} + vec_matches.rank_number), 0.0) AS combined_rank
-          FROM vec_matches
-          JOIN ${this.chunksTableName} c ON c.id = vec_matches.id
-          ${filterClause}
-          ORDER BY combined_rank DESC
-          LIMIT ${finalLimit}
-        )
-        SELECT * FROM fused`;
-      return { sql, params };
-    }
-
-    if (hasKeyword) {
-      const langParam = bind(this.ftsLanguage);
-      const queryParam = bind(request.query);
-      const ftsLimit = bind(limit);
-      const finalLimit = bind(limit);
-      const sql = `
-        WITH fts_matches AS (
-          SELECT id,
-            row_number() OVER (
-              ORDER BY ts_rank_cd(tsv, plainto_tsquery(${langParam}::regconfig, ${queryParam})) DESC
-            ) AS rank_number
-          FROM ${this.chunksTableName}
-          WHERE tsv @@ plainto_tsquery(${langParam}::regconfig, ${queryParam})
-          LIMIT ${ftsLimit}
-        ), fused AS (
-          SELECT c.subject, c.predicate, c.graph, c.text,
-            COALESCE(1.0 / (${RRF_K} + fts_matches.rank_number), 0.0) AS combined_rank
-          FROM fts_matches
-          JOIN ${this.chunksTableName} c ON c.id = fts_matches.id
-          ${filterClause}
-          ORDER BY combined_rank DESC
-          LIMIT ${finalLimit}
-        )
-        SELECT * FROM fused`;
-      return { sql, params };
-    }
-
-    return {
-      sql: `SELECT NULL::text AS subject, NULL::text AS predicate, ` +
-        `NULL::text AS graph, NULL::text AS text, 0::numeric AS combined_rank ` +
-        `WHERE 1 = 0`,
-      params: [],
-    };
-  }
-
-  /**
-   * filterSql translates a QuadFilter (include = AND, exclude = OR-reject)
-   * into SQL over the payload's term records. Graph criteria treat the
-   * default graph as the empty value, exactly like filterQuads.
-   */
-  private filterSql(
-    bind: (value: string) => string,
-    include?: QuadFilter["include"],
-    exclude?: QuadFilter["exclude"],
-  ): { where: string[] } {
-    const where: string[] = [];
-    const criteriaSql = (
-      criteria: NonNullable<QuadFilter["include"]> | undefined,
-    ): string[] => {
-      const parts: string[] = [];
-      const inJsonArray = (param: string): string =>
-        `IN (SELECT jsonb_array_elements_text(${param}::jsonb))`;
-      if (criteria?.subjects?.length) {
-        parts.push(
-          `payload->'s'->>'v' ${
-            inJsonArray(bind(JSON.stringify(criteria.subjects)))
-          }`,
-        );
-      }
-      if (criteria?.predicates?.length) {
-        parts.push(
-          `payload->'p'->>'v' ${
-            inJsonArray(bind(JSON.stringify(criteria.predicates)))
-          }`,
-        );
-      }
-      if (criteria?.graphs?.length) {
-        const arrayParam = bind(JSON.stringify(criteria.graphs));
-        parts.push(
-          `((payload->'g'->>'t' = 'D' AND '' ${inJsonArray(arrayParam)}) ` +
-            `OR (payload->'g'->>'t' = 'N' AND payload->'g'->>'v' ${
-              inJsonArray(arrayParam)
-            }))`,
-        );
-      }
-      return parts;
-    };
-    const includeParts = criteriaSql(include);
-    if (includeParts.length > 0) {
-      where.push(`(${includeParts.join(" AND ")})`);
-    }
-    const excludeParts = criteriaSql(exclude);
-    if (excludeParts.length > 0) {
-      where.push(`NOT (${excludeParts.join(" OR ")})`);
-    }
-    return { where };
-  }
-
-  /**
-   * chunkFilterSql translates a QuadFilter into column scoping over the
-   * chunks table (subject/predicate/graph IN / NOT IN). The graph column
-   * stores the quad's graph value directly — the empty string for the
-   * default graph, matching filterQuads.
-   */
-  private chunkFilterSql(
-    bind: (value: string) => string,
-    include?: QuadFilter["include"],
-    exclude?: QuadFilter["exclude"],
-  ): { where: string[] } {
-    const where: string[] = [];
-    const criteriaSql = (
-      criteria: NonNullable<QuadFilter["include"]> | undefined,
-      negate: boolean,
-    ): string[] => {
-      const parts: string[] = [];
-      const inList = (values: string[], column: string): string =>
-        `${column} ${negate ? "NOT " : ""}IN (${values.map(bind).join(", ")})`;
-      if (criteria?.subjects?.length) {
-        parts.push(inList(criteria.subjects, "subject"));
-      }
-      if (criteria?.predicates?.length) {
-        parts.push(inList(criteria.predicates, "predicate"));
-      }
-      if (criteria?.graphs?.length) {
-        parts.push(inList(criteria.graphs, "graph"));
-      }
-      return parts;
-    };
-    const includeParts = criteriaSql(include, false);
-    if (includeParts.length > 0) {
-      where.push(`(${includeParts.join(" AND ")})`);
-    }
-    const excludeParts = criteriaSql(exclude, true);
-    if (excludeParts.length > 0) {
-      where.push(`(${excludeParts.join(" OR ")})`);
-    }
-    return { where };
+    return await keywordScanSearch(this.context, request);
   }
 
   /**
@@ -511,28 +172,7 @@ export class PostgresSearchIndex implements SearchIndexInterface {
    * schema builder) before hybrid search or reindex.
    */
   public async ensureSchema(): Promise<void> {
-    const dimension = this.vectorDimensions;
-    const ftsLanguage = quoteFtsLanguage(this.ftsLanguage);
-    await this.sql.unsafe(`CREATE EXTENSION IF NOT EXISTS vector`);
-    await this.sql.unsafe(
-      `CREATE TABLE IF NOT EXISTS ${this.chunksTableName} (` +
-        "id TEXT PRIMARY KEY," +
-        "graph TEXT NOT NULL," +
-        "subject TEXT NOT NULL," +
-        "predicate TEXT NOT NULL," +
-        "text TEXT NOT NULL," +
-        `embedding vector(${dimension}),` +
-        `tsv tsvector GENERATED ALWAYS AS (to_tsvector(${ftsLanguage}, text)) STORED` +
-        ")",
-    );
-    await this.sql.unsafe(
-      `CREATE INDEX IF NOT EXISTS idx_${this.chunksTableName}_embedding ` +
-        `ON ${this.chunksTableName} USING hnsw (embedding vector_cosine_ops)`,
-    );
-    await this.sql.unsafe(
-      `CREATE INDEX IF NOT EXISTS idx_${this.chunksTableName}_tsv ` +
-        `ON ${this.chunksTableName} USING gin (tsv)`,
-    );
+    await ensureSearchChunksTable(this.context);
   }
 
   /**
@@ -546,121 +186,6 @@ export class PostgresSearchIndex implements SearchIndexInterface {
    * live quads table), so reindex is optional for keyword parity.
    */
   async reindex(request?: ReindexRequest): Promise<ReindexResponse> {
-    const pageSize = Math.max(1, Math.floor(request?.readPageSize ?? 1000));
-    let processedQuadCount = 0;
-    let chunkRowCount = 0;
-    let cursor: readonly [string, string, string, string] | null = null;
-
-    for (;;) {
-      const params: unknown[] = [];
-      const bind = (value: string): string => {
-        params.push(value);
-        return `$${params.length}`;
-      };
-
-      const scoping = this.filterSql(
-        bind,
-        request?.include,
-        request?.exclude,
-      );
-      const where = [...scoping.where];
-      if (cursor) {
-        params.push(...cursor);
-        const offset = params.length;
-        where.push(
-          `(skey, pkey, okey, gkey) > ($${offset - 3}, $${offset - 2}, ` +
-            `$${offset - 1}, $${offset})`,
-        );
-      }
-      params.push(pageSize);
-      const sqlText =
-        `SELECT skey, pkey, okey, gkey, payload FROM ${this.tableName}` +
-        (where.length > 0 ? ` WHERE ${where.join(" AND ")}` : "") +
-        ` ORDER BY skey, pkey, okey, gkey LIMIT $${params.length}`;
-      const rows = await this.sql.unsafe<QuadRow>(sqlText, params);
-
-      if (rows.length === 0) {
-        break;
-      }
-
-      const quads = rows.map((row) => fromQuadRow(row));
-      processedQuadCount += quads.length;
-
-      // Split textual literals into chunk rows (the identity splitter yields
-      // one chunk per quad when no textSplitter is configured).
-      const chunks = await chunkQuads(quads, this.textSplitter);
-
-      // Refresh semantics (mirroring @worlds/libsql): clear this page's
-      // previous chunk rows first, so split changes never leave stale rows.
-      if (chunks.length > 0) {
-        const quadIds = Array.from(new Set(chunks.map((c) => c.quad_id)));
-        await this.sql.unsafe(
-          `DELETE FROM ${this.chunksTableName} WHERE id LIKE ANY($1::text[])`,
-          [quadIds.map((id) => `${escapeLike(id)}#%`)],
-        );
-      }
-
-      // Row id is `${quad_id}#<localIndex>` — unique per split piece and
-      // stable across reruns for a deterministic splitter.
-      const localIndexByQuad = new Map<string, number>();
-      const chunkRows = chunks.map((chunk) => {
-        const localIndex = localIndexByQuad.get(chunk.quad_id) ?? 0;
-        localIndexByQuad.set(chunk.quad_id, localIndex + 1);
-        return {
-          id: `${chunk.quad_id}#${localIndex}`,
-          graph: chunk.graph,
-          subject: chunk.subject,
-          predicate: chunk.predicate,
-          text: chunk.value,
-        };
-      });
-
-      let vectors: Array<Float32Array | number[]> | undefined;
-      if (this.embeddingService && chunkRows.length > 0) {
-        vectors = await this.embeddingService.embed(
-          chunkRows.map((row) => row.text),
-        );
-        for (const vector of vectors) {
-          if (vector.length !== this.vectorDimensions) {
-            throw new Error(
-              `embedding length ${vector.length} does not match ` +
-                `vectorDimensions ${this.vectorDimensions}`,
-            );
-          }
-        }
-      }
-
-      for (let i = 0; i < chunkRows.length; i++) {
-        const row = chunkRows[i]!;
-        const embedding = vectors?.[i];
-        await this.sql.unsafe(
-          `INSERT INTO ${this.chunksTableName} ` +
-            "(id, graph, subject, predicate, text, embedding) " +
-            "VALUES ($1, $2, $3, $4, $5, $6::vector) " +
-            "ON CONFLICT (id) DO UPDATE SET " +
-            "text = EXCLUDED.text, embedding = EXCLUDED.embedding",
-          [
-            row.id,
-            row.graph,
-            row.subject,
-            row.predicate,
-            row.text,
-            embedding ? JSON.stringify(Array.from(embedding)) : null,
-          ],
-        );
-        chunkRowCount++;
-      }
-
-      if (rows.length < pageSize) {
-        break;
-      }
-      const last = rows[rows.length - 1]!;
-      cursor = [last.skey, last.pkey, last.okey, last.gkey];
-    }
-
-    return {
-      processedQuadCount,
-      chunkRowCount,
-    };
+    return await reindexChunks(this.context, request);
   }
 }
