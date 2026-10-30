@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: File length (warn-only; 120 src / 300 test, blank/comment/import/re-export lines excluded)
+      - name: File length (enforced; 120 src / 300 test, blank/comment/import/re-export lines excluded)
         run: |
           cat > "$RUNNER_TEMP/loc.awk" <<'AWK'
           inimp { if ($0 ~ /from[ \t]*["'][^"']+["'];?[ \t]*$/ || $0 ~ /^[ \t]*\}/) inimp = 0; next }
@@ -22,13 +22,19 @@ jobs:
           { n++ }
           END { print n + 0 }
           AWK
+          # Exceptions: exact paths allowed to exceed their limit. This list
+          # may only shrink; it is empty because no file exceeds its limit.
+          ALLOW=""
+          : > "$RUNNER_TEMP/violations"
           git ls-files '*.ts' '*.tsx' '*.js' '*.mjs' \
             | grep -vE '(^|/)(node_modules|dist|generated|fixtures|\.next)/|\.d\.ts$|\.gen\.|openapi|snapshot|schema' \
             | while read -r f; do
                 n=$(awk -f "$RUNNER_TEMP/loc.awk" "$f")
                 case "$f" in *.test.*|*.spec.*|*/tests/*|tests/*) max=300;; *) max=120;; esac
-                if [ "$n" -gt "$max" ]; then echo "::warning file=$f::$n lines of code (limit $max)"; echo "- \`$f\`: $n (limit $max)" >> "$GITHUB_STEP_SUMMARY"; fi
+                case " $ALLOW " in *" $f "*) continue;; esac
+                if [ "$n" -gt "$max" ]; then echo "::error file=$f::$n lines of code (limit $max)"; echo "- \`$f\`: $n (limit $max)" | tee -a "$GITHUB_STEP_SUMMARY" >> "$RUNNER_TEMP/violations"; fi
               done
+          if [ -s "$RUNNER_TEMP/violations" ]; then exit 1; fi
       - name: TODO/FIXME without an issue link (warn-only)
         run: |
           git grep -nE '\b(TODO|FIXME)\b' -- '*.ts' '*.tsx' '*.js' '*.mjs' ':!*generated*' \
