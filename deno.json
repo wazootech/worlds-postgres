@@ -34,7 +34,10 @@
     "@langchain/textsplitters": "npm:@langchain/textsplitters@^1.0.1",
     "zod": "npm:zod@^4.4.3"
   },
-  "minimumDependencyAge": 0,
+  "minimumDependencyAge": {
+    "age": "P1D",
+    "exclude": ["jsr:@wazoo/sparql-engine", "jsr:@worlds/sdk"]
+  },
   "tasks": {
     "fmt": "deno fmt",
     "fmt:check": "deno fmt --check",
