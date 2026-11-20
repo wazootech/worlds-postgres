@@ -9,14 +9,15 @@ import type {
 import { buildSearchResultId } from "@worlds/sdk/search-index";
 import type { EmbeddingService } from "@worlds/sdk/search-index/embedding-service";
 import type { TextSplitterInterface } from "@worlds/sdk/search-index/quad-chunker";
-import { chunkQuads } from "@worlds/sdk/search-index/quad-chunker";
-import type { QuadFilter } from "@worlds/sdk/quad-store";
+import { chunkAndEmbedQuads } from "@worlds/sdk/search-index/quad-chunker";
+import { hashQuads, type QuadFilter } from "@worlds/sdk/quad-store";
 import {
   fromQuadRow,
   type QuadRow,
 } from "@/postgres/rdfjs-store/quad-record.ts";
 import { quoteFtsLanguage } from "@/postgres/schema/postgres-schema-builder.ts";
 import type { PostgresSql } from "@/postgres/sql/postgres-sql.ts";
+import { writeChunkPage } from "./write-chunk-page.ts";
 
 const XSD_STRING = "http://www.w3.org/2001/XMLSchema#string";
 const RDF_LANGSTRING = "http://www.w3.org/1999/02/22-rdf-syntax-ns#langString";
@@ -49,15 +50,6 @@ const IDENTITY_TEXT_SPLITTER: TextSplitterInterface = {
     );
   },
 };
-
-/**
- * escapeLike escapes LIKE wildcards so a literal prefix match stays exact
- * (chunk row ids embed content-hash quad ids).
- */
-function escapeLike(value: string): string {
-  return value.replaceAll("\\", "\\\\").replaceAll("%", "\\%")
-    .replaceAll("_", "\\_");
-}
 
 /**
  * PostgresSearchIndexOptions defines configuration options for PostgresSearchIndex.
@@ -544,6 +536,12 @@ export class PostgresSearchIndex implements SearchIndexInterface {
    * an embedding service is configured, populates each chunk's `embedding`
    * column. Keyword search does not depend on this projection (it scans the
    * live quads table), so reindex is optional for keyword parity.
+   *
+   * Each page is chunked and embedded (`chunkAndEmbedQuads`, which embeds each
+   * distinct text once) before anything is written, then its chunk rows are
+   * replaced in one SQL transaction. A failure therefore leaves that page's
+   * existing rows untouched and earlier pages indexed; the rebuild as a whole
+   * is not one transaction, because embedding calls an external service.
    */
   async reindex(request?: ReindexRequest): Promise<ReindexResponse> {
     const pageSize = Math.max(1, Math.floor(request?.readPageSize ?? 1000));
@@ -586,70 +584,22 @@ export class PostgresSearchIndex implements SearchIndexInterface {
       const quads = rows.map((row) => fromQuadRow(row));
       processedQuadCount += quads.length;
 
-      // Split textual literals into chunk rows (the identity splitter yields
-      // one chunk per quad when no textSplitter is configured).
-      const chunks = await chunkQuads(quads, this.textSplitter);
-
-      // Refresh semantics (mirroring @worlds/libsql): clear this page's
-      // previous chunk rows first, so split changes never leave stale rows.
-      if (chunks.length > 0) {
-        const quadIds = Array.from(new Set(chunks.map((c) => c.quad_id)));
-        await this.sql.unsafe(
-          `DELETE FROM ${this.chunksTableName} WHERE id LIKE ANY($1::text[])`,
-          [quadIds.map((id) => `${escapeLike(id)}#%`)],
-        );
-      }
-
-      // Row id is `${quad_id}#<localIndex>` — unique per split piece and
-      // stable across reruns for a deterministic splitter.
-      const localIndexByQuad = new Map<string, number>();
-      const chunkRows = chunks.map((chunk) => {
-        const localIndex = localIndexByQuad.get(chunk.quad_id) ?? 0;
-        localIndexByQuad.set(chunk.quad_id, localIndex + 1);
-        return {
-          id: `${chunk.quad_id}#${localIndex}`,
-          graph: chunk.graph,
-          subject: chunk.subject,
-          predicate: chunk.predicate,
-          text: chunk.value,
-        };
-      });
-
-      let vectors: Array<Float32Array | number[]> | undefined;
-      if (this.embeddingService && chunkRows.length > 0) {
-        vectors = await this.embeddingService.embed(
-          chunkRows.map((row) => row.text),
-        );
-        for (const vector of vectors) {
-          if (vector.length !== this.vectorDimensions) {
-            throw new Error(
-              `embedding length ${vector.length} does not match ` +
-                `vectorDimensions ${this.vectorDimensions}`,
-            );
-          }
-        }
-      }
-
-      for (let i = 0; i < chunkRows.length; i++) {
-        const row = chunkRows[i]!;
-        const embedding = vectors?.[i];
-        await this.sql.unsafe(
-          `INSERT INTO ${this.chunksTableName} ` +
-            "(id, graph, subject, predicate, text, embedding) " +
-            "VALUES ($1, $2, $3, $4, $5, $6::vector) " +
-            "ON CONFLICT (id) DO UPDATE SET " +
-            "text = EXCLUDED.text, embedding = EXCLUDED.embedding",
-          [
-            row.id,
-            row.graph,
-            row.subject,
-            row.predicate,
-            row.text,
-            embedding ? JSON.stringify(Array.from(embedding)) : null,
-          ],
-        );
-        chunkRowCount++;
-      }
+      // Chunk and embed the whole page before any write, so a splitter or
+      // embedding failure leaves this page's existing chunk rows untouched.
+      const { rows: chunkRows } = await chunkAndEmbedQuads(
+        quads,
+        hashQuads(quads),
+        {
+          textSplitter: this.textSplitter,
+          embeddingService: this.embeddingService,
+          vectorDimensions: this.vectorDimensions,
+        },
+      );
+      chunkRowCount += await writeChunkPage(
+        this.sql,
+        this.chunksTableName,
+        chunkRows,
+      );
 
       if (rows.length < pageSize) {
         break;
