@@ -110,12 +110,21 @@ const { results } = await sdk.search({ query: "hybrid query" });
 separately, consistent with `@worlds/libsql`. Without a splitter, one chunk row
 per textual literal is written (the identity default).
 
+Chunk rows are written only by `reindex()`; a commit never projects them. Each
+page of quads is chunked and embedded first (each distinct text is embedded
+once), then its chunk rows are replaced in a single SQL transaction, so an
+embedding or write failure leaves that page's existing rows untouched and
+earlier pages indexed. The rebuild as a whole is not one transaction.
+
 ## Parity
 
 `deno task ci` runs a full-corpus parity suite (`runParitySuite` from
 `@worlds/sdk/testing`) comparing `createPostgresWorldsSdk` against the portable
 in-memory reference (`@worlds/sdk/memory`) over PGlite — search ordering is
-compared set-wise, since SQL keyword-scan order is not a parity contract.
+compared set-wise, since SQL keyword-scan order is not a parity contract. The
+shared commit conformance suite (`runCommitConformanceSuite`) runs against the
+real commit path too; only the cases that need commit-time projection are pinned
+as not applicable (see `src/postgres/testing/commit-conformance.test.ts`).
 
 ## Development
 

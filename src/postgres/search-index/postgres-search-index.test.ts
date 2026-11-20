@@ -463,10 +463,16 @@ Deno.test(
         await importQuads(mismatched.sql, [
           textQuad("ethan", "about", "Ethan loves bagels"),
         ]);
-        await assertRejects(
+        // The shared chunkAndEmbedQuads wraps the failure; the cause names
+        // the mismatch.
+        const error = await assertRejects(
           () => mismatched.index.reindex(),
           Error,
-          "vectorDimensions",
+          "failed to vectorize literal chunk blocks",
+        );
+        assertEquals(
+          (error.cause as Error).message.includes("vectorDimensions"),
+          true,
         );
       } finally {
         await mismatched.close();
