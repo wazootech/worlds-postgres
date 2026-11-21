@@ -55,6 +55,5 @@ export function toProjectionOptions(
     textSplitter: options.textSplitter ?? IDENTITY_TEXT_SPLITTER,
     embeddingService: options.embeddingService,
     vectorDimensions: options.vectorDimensions ?? DEFAULT_VECTOR_DIMENSION,
-    onEmbeddingFailure: "throw",
   };
 }
