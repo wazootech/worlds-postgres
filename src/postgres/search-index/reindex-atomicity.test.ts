@@ -1,10 +1,11 @@
 /**
  * reindex() chunks and embeds a page before writing it, then replaces that
- * page's chunk rows in one SQL transaction. These tests pin the failure
- * contract: an embedding or write failure leaves the failing page's existing
- * rows untouched, earlier pages stay indexed, and embedding inputs are
- * de-duplicated. They are the reindex equivalents of the shared conformance
- * cases Postgres cannot run at commit time (see commit-conformance.test.ts).
+ * page's chunk rows in one SQL transaction. These tests pin its failure
+ * contract: an embedding or write failure writes nothing for the failing page,
+ * earlier pages stay indexed, a rerun repairs the rest, and embedding inputs
+ * are de-duplicated. The harness sets `searchIndexOnImport: "disabled"` so commits
+ * write quads only and every chunk row here comes from reindex(); commit-time
+ * projection is covered by the shared conformance suite.
  */
 import { assertEquals, assertRejects } from "@std/assert";
 import { DataFactory } from "@wazoo/sparql-engine";
@@ -58,7 +59,7 @@ async function versions(
 /** indexed creates four textual quads, two per page at readPageSize 2, indexed at version 1. */
 async function indexedHarness() {
   const embeddings = new ScriptedEmbeddings();
-  const harness = await createPostgresCommitHarness(embeddings);
+  const harness = await createPostgresCommitHarness(embeddings, "disabled");
   await harness.subject.commit({
     insertions: ["a1", "a2", "a3", "a4"].map((n) => textQuad(n)),
     deletions: [],
@@ -73,7 +74,7 @@ async function indexedHarness() {
   return { embeddings, harness };
 }
 
-Deno.test("an embedding failure on a later page keeps that page's old rows and earlier pages", async () => {
+Deno.test("an embedding failure on a later page keeps the rebuilt pages and leaves the rest unindexed", async () => {
   const { embeddings, harness } = await indexedHarness();
   try {
     embeddings.version = 2;
@@ -83,12 +84,17 @@ Deno.test("an embedding failure on a later page keeps that page's old rows and e
       Error,
       "failed to vectorize literal chunk blocks",
     );
-    // Page one was rewritten, page two still has its previous vectors.
+    // The shared rebuild clears the chunk table in page one's transaction, so
+    // page one is rewritten and page two is not indexed until the rebuild is
+    // run again, which repairs it.
+    assertEquals(await versions(harness), { "urn:t:a1": 2, "urn:t:a2": 2 });
+    embeddings.failOnCall = null;
+    await harness.index.reindex({ readPageSize: 2 });
     assertEquals(await versions(harness), {
       "urn:t:a1": 2,
       "urn:t:a2": 2,
-      "urn:t:a3": 1,
-      "urn:t:a4": 1,
+      "urn:t:a3": 2,
+      "urn:t:a4": 2,
     });
   } finally {
     await harness.close();
@@ -120,7 +126,7 @@ Deno.test("a failed page write rolls the page back", async () => {
 Deno.test("an embedding failure on a fresh index writes no chunk rows", async () => {
   const embeddings = new ScriptedEmbeddings();
   embeddings.failOnCall = 1;
-  const harness = await createPostgresCommitHarness(embeddings);
+  const harness = await createPostgresCommitHarness(embeddings, "disabled");
   try {
     await harness.subject.commit({
       insertions: [textQuad("a1"), textQuad("a2")],
@@ -135,7 +141,7 @@ Deno.test("an embedding failure on a fresh index writes no chunk rows", async ()
 
 Deno.test("reindex embeds each distinct chunk text once", async () => {
   const embeddings = new ScriptedEmbeddings();
-  const harness = await createPostgresCommitHarness(embeddings);
+  const harness = await createPostgresCommitHarness(embeddings, "disabled");
   try {
     await harness.subject.commit({
       insertions: [

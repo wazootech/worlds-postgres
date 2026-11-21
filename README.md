@@ -83,12 +83,11 @@ import { PostgresRdfjsStore } from "@worlds/postgres/rdfjs-store";
   semantics — case-insensitive substring over textual literals in the live quads
   table. This is the parity path.
 - **Hybrid** (embedding service configured): Reciprocal Rank Fusion over the
-  reindexed chunks table — a tsvector keyword branch
-  (`to_tsvector`/`plainto_tsquery` in the configured `ftsLanguage`, default
-  `"english"`) and a pgvector cosine branch, each ranked 1..topK and fused as
-  `1/(60 + rank)` summed, consistent with `@worlds/libsql`. A query-time
-  embedding failure degrades to the keyword branch; an empty query runs the
-  vector branch alone.
+  chunks table — a tsvector keyword branch (`to_tsvector`/`plainto_tsquery` in
+  the configured `ftsLanguage`, default `"english"`) and a pgvector cosine
+  branch, each ranked 1..topK and fused as `1/(60 + rank)` summed, consistent
+  with `@worlds/libsql`. A query-time embedding failure degrades to the keyword
+  branch; an empty query runs the vector branch alone.
 
 ```typescript
 import { createPostgresWorldsSdk } from "@worlds/postgres/sdk";
@@ -100,21 +99,39 @@ const sdk = await createPostgresWorldsSdk({
   ftsLanguage: "english",
   textSplitter: new RecursiveCharacterTextSplitter({ chunkSize: 1000 }),
 });
-await sdk.reindex(); // populate chunk embeddings + tsvectors (keyset-paginated)
+await sdk.import({ source }); // chunks are projected in the commit itself
+await sdk.reindex(); // optional full rebuild (new splitter or embedding model)
 const { results } = await sdk.search({ query: "hybrid query" });
 ```
 
-`reindex()` slices long literal values into chunk rows via the optional
-`textSplitter` (any `TextSplitterInterface`, e.g. LangChain's
+Commits slice and `reindex()` slices long literal values into chunk rows via the
+optional `textSplitter` (any `TextSplitterInterface`, e.g. LangChain's
 `RecursiveCharacterTextSplitter`) — each piece is embedded and FTS-indexed
 separately, consistent with `@worlds/libsql`. Without a splitter, one chunk row
 per textual literal is written (the identity default).
 
-Chunk rows are written only by `reindex()`; a commit never projects them. Each
+### Commit path
+
+Commits run the shared SQL commit core (`@worlds/sqlite/sql-core`, the same
+`commitSqlPatch` the other SQL backends use) over a Postgres driver and dialect.
+With an `embeddingService` set, a commit writes its quads, deletions,
+replace-import wipe and chunk rows in **one SQL transaction**, so it lands whole
+or not at all. Chunks and embeddings are computed before the transaction opens:
+an embedding failure rejects the commit with nothing written (retry it).
+`searchIndexOnImport` (default `"incremental"`) picks `"incremental"` (project
+in every commit), `"deferred"` (skip projection during an import and rebuild
+once after it) or `"disabled"` (never project at commit; use `reindex()`).
+Without an `embeddingService` no chunk rows are kept and a commit writes quads
+only.
+
+`reindex()` is the full rebuild through the shared `rebuildSqlSearchIndex`. Each
 page of quads is chunked and embedded first (each distinct text is embedded
-once), then its chunk rows are replaced in a single SQL transaction, so an
-embedding or write failure leaves that page's existing rows untouched and
-earlier pages indexed. The rebuild as a whole is not one transaction.
+once), then written in a single SQL transaction. An unscoped rebuild clears
+every chunk row in its first page's transaction (also dropping rows of quads
+that no longer exist), so a failure on a later page leaves the later pages
+unindexed until it is run again. A scoped rebuild (`include`/`exclude`) replaces
+only the rows of the quads in scope. The rebuild as a whole is not one
+transaction.
 
 ## Parity
 
@@ -123,8 +140,9 @@ earlier pages indexed. The rebuild as a whole is not one transaction.
 in-memory reference (`@worlds/sdk/memory`) over PGlite — search ordering is
 compared set-wise, since SQL keyword-scan order is not a parity contract. The
 shared commit conformance suite (`runCommitConformanceSuite`) runs against the
-real commit path too; only the cases that need commit-time projection are pinned
-as not applicable (see `src/postgres/testing/commit-conformance.test.ts`).
+real commit path too, with all nine cases and the converged contract (atomic
+commit, embedding failure throws, default `"incremental"`); see
+`src/postgres/testing/commit-conformance.test.ts`.
 
 ## Development
 
