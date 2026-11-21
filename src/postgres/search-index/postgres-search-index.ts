@@ -9,47 +9,27 @@ import type {
 import { buildSearchResultId } from "@worlds/sdk/search-index";
 import type { EmbeddingService } from "@worlds/sdk/search-index/embedding-service";
 import type { TextSplitterInterface } from "@worlds/sdk/search-index/quad-chunker";
-import { chunkAndEmbedQuads } from "@worlds/sdk/search-index/quad-chunker";
-import { hashQuads, type QuadFilter } from "@worlds/sdk/quad-store";
+import type { QuadFilter } from "@worlds/sdk/quad-store";
+import { rebuildPostgresChunks } from "@/postgres/commit/postgres-rebuild.ts";
 import {
-  fromQuadRow,
-  type QuadRow,
-} from "@/postgres/rdfjs-store/quad-record.ts";
+  DEFAULT_CHUNKS_TABLE,
+  DEFAULT_VECTOR_DIMENSION,
+  IDENTITY_TEXT_SPLITTER,
+  MAX_VECTOR_DIMENSION,
+} from "@/postgres/commit/search-projection.ts";
+import { fromQuadRow } from "@/postgres/rdfjs-store/quad-record.ts";
+import { quadFilterSql } from "./quad-filter-sql.ts";
 import { quoteFtsLanguage } from "@/postgres/schema/postgres-schema-builder.ts";
 import type { PostgresSql } from "@/postgres/sql/postgres-sql.ts";
-import { writeChunkPage } from "./write-chunk-page.ts";
 
 const XSD_STRING = "http://www.w3.org/2001/XMLSchema#string";
 const RDF_LANGSTRING = "http://www.w3.org/1999/02/22-rdf-syntax-ns#langString";
-
-/** Default vector dimension for the search chunks table (matches the schema). */
-const DEFAULT_VECTOR_DIMENSION = 1536;
-
-/** Maximum supported vector dimension (matches the schema builder's default cap). */
-const MAX_VECTOR_DIMENSION = 1536;
 
 /** Default search result limit for the hybrid path (mirrors @worlds/libsql). */
 const DEFAULT_HYBRID_TOP_K = 100;
 
 /** RRF rank-offset constant, consistent with @worlds/libsql's 1/(60 + rank). */
 const RRF_K = 60;
-
-/**
- * Identity splitter: one chunk per textual literal, preserving the original
- * reindex behavior when no textSplitter is configured. Pass a real splitter
- * (e.g. LangChain's RecursiveCharacterTextSplitter) to break long literals
- * into multiple chunk rows, consistent with @worlds/libsql.
- */
-const IDENTITY_TEXT_SPLITTER: TextSplitterInterface = {
-  createDocuments(texts, metadatas) {
-    return Promise.resolve(
-      texts.map((text, index) => ({
-        pageContent: text,
-        metadata: metadatas?.[index],
-      })),
-    );
-  },
-};
 
 /**
  * PostgresSearchIndexOptions defines configuration options for PostgresSearchIndex.
@@ -62,8 +42,8 @@ export interface PostgresSearchIndexOptions {
   /**
    * embeddingService optionally projects text into dense vectors. When set,
    * search() runs hybrid RRF fusion (keyword FTS + vector cosine over the
-   * reindexed chunks table) and reindex() populates the chunk `embedding`
-   * column. When unset, search() keeps the reference's exact keyword scan
+   * chunks table, which commits populate) and reindex() rebuilds the chunk
+   * `embedding` column. When unset, search() keeps the reference's exact keyword scan
    * over the live quads table and reindex() writes text-only chunk rows.
    */
   embeddingService?: EmbeddingService;
@@ -85,8 +65,8 @@ export interface PostgresSearchIndexOptions {
   ftsLanguage?: string;
 
   /**
-   * textSplitter slices long literal values into multiple chunk rows during
-   * reindex() (each row embedded and FTS-indexed separately), consistent
+   * textSplitter slices long literal values into multiple chunk rows at commit and
+   * in reindex() (each row embedded and FTS-indexed separately), consistent
    * with @worlds/libsql. Defaults to an identity splitter (one chunk per
    * textual literal, the original behavior).
    */
@@ -137,7 +117,7 @@ export class PostgresSearchIndex implements SearchIndexInterface {
     this.sql = options.sql;
     this.tableName = options.quadsTableName ?? "worlds_quads";
     this.chunksTableName = options.searchChunksTableName ??
-      "worlds_search_chunks";
+      DEFAULT_CHUNKS_TABLE;
     this.embeddingService = options.embeddingService;
     this.vectorDimensions = options.vectorDimensions ??
       DEFAULT_VECTOR_DIMENSION;
@@ -202,7 +182,9 @@ export class PostgresSearchIndex implements SearchIndexInterface {
       }) || '%' ESCAPE '\\'`,
     );
 
-    const scoping = this.filterSql(bind, request.include, request.exclude);
+    const scoping = {
+      where: quadFilterSql(bind, request.include, request.exclude),
+    };
     where.push(...scoping.where);
 
     const sqlText = `SELECT payload FROM ${this.tableName}` +
@@ -402,59 +384,6 @@ export class PostgresSearchIndex implements SearchIndexInterface {
   }
 
   /**
-   * filterSql translates a QuadFilter (include = AND, exclude = OR-reject)
-   * into SQL over the payload's term records. Graph criteria treat the
-   * default graph as the empty value, exactly like filterQuads.
-   */
-  private filterSql(
-    bind: (value: string) => string,
-    include?: QuadFilter["include"],
-    exclude?: QuadFilter["exclude"],
-  ): { where: string[] } {
-    const where: string[] = [];
-    const criteriaSql = (
-      criteria: NonNullable<QuadFilter["include"]> | undefined,
-    ): string[] => {
-      const parts: string[] = [];
-      const inJsonArray = (param: string): string =>
-        `IN (SELECT jsonb_array_elements_text(${param}::jsonb))`;
-      if (criteria?.subjects?.length) {
-        parts.push(
-          `payload->'s'->>'v' ${
-            inJsonArray(bind(JSON.stringify(criteria.subjects)))
-          }`,
-        );
-      }
-      if (criteria?.predicates?.length) {
-        parts.push(
-          `payload->'p'->>'v' ${
-            inJsonArray(bind(JSON.stringify(criteria.predicates)))
-          }`,
-        );
-      }
-      if (criteria?.graphs?.length) {
-        const arrayParam = bind(JSON.stringify(criteria.graphs));
-        parts.push(
-          `((payload->'g'->>'t' = 'D' AND '' ${inJsonArray(arrayParam)}) ` +
-            `OR (payload->'g'->>'t' = 'N' AND payload->'g'->>'v' ${
-              inJsonArray(arrayParam)
-            }))`,
-        );
-      }
-      return parts;
-    };
-    const includeParts = criteriaSql(include);
-    if (includeParts.length > 0) {
-      where.push(`(${includeParts.join(" AND ")})`);
-    }
-    const excludeParts = criteriaSql(exclude);
-    if (excludeParts.length > 0) {
-      where.push(`NOT (${excludeParts.join(" OR ")})`);
-    }
-    return { where };
-  }
-
-  /**
    * chunkFilterSql translates a QuadFilter into column scoping over the
    * chunks table (subject/predicate/graph IN / NOT IN). The graph column
    * stores the quad's graph value directly — the empty string for the
@@ -528,89 +457,31 @@ export class PostgresSearchIndex implements SearchIndexInterface {
   }
 
   /**
-   * Rebuilds the search chunk table from durable quads in PostgreSQL —
-   * the vector/hybrid seam (embedding + tsvector per chunk). Paginates
-   * every quad with keyset paging over the ordered key columns (no quads
-   * skipped or duplicated across pages), splits textual literals into chunk
-   * rows via the configured textSplitter (identity by default), and, when
-   * an embedding service is configured, populates each chunk's `embedding`
-   * column. Keyword search does not depend on this projection (it scans the
-   * live quads table), so reindex is optional for keyword parity.
+   * Rebuilds the search chunk table from the durable quads through the shared
+   * SQL core (`rebuildSqlSearchIndex`): keyset-pages the quads (optionally
+   * scoped by include/exclude), splits textual literals into chunk rows via the
+   * configured textSplitter, and, with an embedding service, fills each chunk's
+   * `embedding` column. Commits already project chunks (see
+   * `searchIndexOnImport`), so reindex is the full rebuild: use it after a
+   * schema, splitter, or embedding-model change, or for rows written before
+   * commit-time projection existed. Keyword search without an embedding
+   * service scans the live quads table and does not need it.
    *
-   * Each page is chunked and embedded (`chunkAndEmbedQuads`, which embeds each
-   * distinct text once) before anything is written, then its chunk rows are
-   * replaced in one SQL transaction. A failure therefore leaves that page's
-   * existing rows untouched and earlier pages indexed; the rebuild as a whole
-   * is not one transaction, because embedding calls an external service.
+   * Each page is chunked and embedded before anything is written, then its
+   * chunk rows are replaced in one SQL transaction, so a failure writes nothing
+   * for that page and leaves earlier pages indexed. An unscoped rebuild clears
+   * every chunk row in its first page's transaction, so pages after a failure
+   * stay unindexed until the rebuild is run again. The rebuild as a whole is
+   * not one transaction, because embedding calls an external service.
    */
   async reindex(request?: ReindexRequest): Promise<ReindexResponse> {
-    const pageSize = Math.max(1, Math.floor(request?.readPageSize ?? 1000));
-    let processedQuadCount = 0;
-    let chunkRowCount = 0;
-    let cursor: readonly [string, string, string, string] | null = null;
-
-    for (;;) {
-      const params: unknown[] = [];
-      const bind = (value: string): string => {
-        params.push(value);
-        return `$${params.length}`;
-      };
-
-      const scoping = this.filterSql(
-        bind,
-        request?.include,
-        request?.exclude,
-      );
-      const where = [...scoping.where];
-      if (cursor) {
-        params.push(...cursor);
-        const offset = params.length;
-        where.push(
-          `(skey, pkey, okey, gkey) > ($${offset - 3}, $${offset - 2}, ` +
-            `$${offset - 1}, $${offset})`,
-        );
-      }
-      params.push(pageSize);
-      const sqlText =
-        `SELECT skey, pkey, okey, gkey, payload FROM ${this.tableName}` +
-        (where.length > 0 ? ` WHERE ${where.join(" AND ")}` : "") +
-        ` ORDER BY skey, pkey, okey, gkey LIMIT $${params.length}`;
-      const rows = await this.sql.unsafe<QuadRow>(sqlText, params);
-
-      if (rows.length === 0) {
-        break;
-      }
-
-      const quads = rows.map((row) => fromQuadRow(row));
-      processedQuadCount += quads.length;
-
-      // Chunk and embed the whole page before any write, so a splitter or
-      // embedding failure leaves this page's existing chunk rows untouched.
-      const { rows: chunkRows } = await chunkAndEmbedQuads(
-        quads,
-        hashQuads(quads),
-        {
-          textSplitter: this.textSplitter,
-          embeddingService: this.embeddingService,
-          vectorDimensions: this.vectorDimensions,
-        },
-      );
-      chunkRowCount += await writeChunkPage(
-        this.sql,
-        this.chunksTableName,
-        chunkRows,
-      );
-
-      if (rows.length < pageSize) {
-        break;
-      }
-      const last = rows[rows.length - 1]!;
-      cursor = [last.skey, last.pkey, last.okey, last.gkey];
-    }
-
-    return {
-      processedQuadCount,
-      chunkRowCount,
-    };
+    return await rebuildPostgresChunks({
+      sql: this.sql,
+      quadsTableName: this.tableName,
+      searchChunksTableName: this.chunksTableName,
+      embeddingService: this.embeddingService,
+      vectorDimensions: this.vectorDimensions,
+      textSplitter: this.textSplitter,
+    }, request);
   }
 }

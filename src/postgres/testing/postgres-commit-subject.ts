@@ -1,4 +1,5 @@
 import type { CommitConformanceSubject } from "@worlds/sdk/testing";
+import type { SearchIndexOnImport } from "@worlds/sdk/search-index";
 import type { EmbeddingService } from "@worlds/sdk/search-index/embedding-service";
 import { buildPostgresSchemaSql } from "@/postgres/schema/postgres-schema-builder.ts";
 import { PostgresRdfjsStore } from "@/postgres/rdfjs-store/postgres-rdfjs-store.ts";
@@ -12,9 +13,14 @@ export const CONFORMANCE_VECTOR_DIMENSIONS = 32;
 /**
  * FailOnceSql wraps a PostgresSql so a test can make the next transaction fail
  * after its statements ran but before it commits, which proves the rollback.
+ * It also counts full search-index rebuilds: a transaction that clears the
+ * whole chunks table without wiping the quads (a replace import wipes both).
  */
 export class FailOnceSql implements PostgresSql {
   private failNext = false;
+
+  /** rebuilds is how many transactions cleared the chunks table alone. */
+  public rebuilds = 0;
 
   public constructor(private readonly inner: PostgresSql) {}
 
@@ -33,7 +39,17 @@ export class FailOnceSql implements PostgresSql {
     ) => Promise<T>,
   ): Promise<T> {
     return this.inner.begin(async (tx) => {
-      const result = await fn(tx);
+      const run: string[] = [];
+      const result = await fn({
+        unsafe: (query, params) => {
+          run.push(query);
+          return tx.unsafe(query, params);
+        },
+      });
+      if (
+        run.includes("DELETE FROM worlds_search_chunks") &&
+        !run.includes("DELETE FROM worlds_quads")
+      ) this.rebuilds++;
       if (this.failNext) {
         this.failNext = false;
         throw new Error("injected write failure");
@@ -59,12 +75,12 @@ export interface PostgresCommitHarness {
 /**
  * createPostgresCommitHarness builds a PGlite database with the quads and
  * search chunks tables and returns the pieces plus the suite's subject. The
- * subject's `commit` is Postgres's real durable commit, `applyPatch`: one SQL
- * transaction. Postgres writes chunk rows only in `reindex()`, so nothing in
- * `commit` projects, and `fullRebuildCount` counts reindex calls.
+ * subject's `commit` is Postgres's real durable commit, `applyPatch`: the shared
+ * SQL commit core in one SQL transaction, projecting chunks at commit.
  */
 export async function createPostgresCommitHarness(
   embeddingService: EmbeddingService,
+  searchIndexOnImport?: SearchIndexOnImport,
 ): Promise<PostgresCommitHarness> {
   const pglite = await createPGliteSql({
     schemaSql: buildPostgresSchemaSql({
@@ -72,22 +88,22 @@ export async function createPostgresCommitHarness(
     }),
   });
   const sql = new FailOnceSql(pglite);
-  const store = new PostgresRdfjsStore({ sql });
+  const store = new PostgresRdfjsStore({
+    sql,
+    search: {
+      embeddingService,
+      vectorDimensions: CONFORMANCE_VECTOR_DIMENSIONS,
+      searchIndexOnImport,
+    },
+  });
   await store.ensureSchema();
   const index = new PostgresSearchIndex({
     sql,
     embeddingService,
     vectorDimensions: CONFORMANCE_VECTOR_DIMENSIONS,
   });
-  let rebuilds = 0;
-  const reindex = index.reindex.bind(index);
-  index.reindex = (request) => {
-    rebuilds++;
-    return reindex(request);
-  };
   const subject: CommitConformanceSubject = {
-    commit: (patch, context) =>
-      store.applyPatch(patch, { importMode: context?.importMode }),
+    commit: (patch, context) => store.applyPatch(patch, context),
     storedQuads: () => store.getQuads(),
     chunkedQuadIds: async () => {
       const rows = await sql.unsafe<{ id: string }>(
@@ -96,7 +112,7 @@ export async function createPostgresCommitHarness(
       return rows.map((row) => row.id.split("#")[0]!);
     },
     failNextWrite: () => sql.failNextTransaction(),
-    fullRebuildCount: () => rebuilds,
+    fullRebuildCount: () => sql.rebuilds,
   };
   return { sql, store, index, subject, close: () => sql.end() };
 }

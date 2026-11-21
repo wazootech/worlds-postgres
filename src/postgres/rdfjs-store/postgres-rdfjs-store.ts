@@ -35,14 +35,17 @@
  */
 import type * as rdfjs from "@rdfjs/types";
 import { DataFactory } from "@wazoo/sparql-engine";
-import type { Patch } from "@worlds/sdk";
+import type { Patch, TransactionContext } from "@worlds/sdk/quad-store";
+import {
+  createPostgresCommit,
+  type PostgresCommitSearchOptions,
+} from "@/postgres/commit/postgres-commit.ts";
 import type { PostgresSql } from "@/postgres/sql/postgres-sql.ts";
 import {
   fromQuadRow,
   quadKey,
   type QuadRow,
   splitQuadKey,
-  toQuadRecord,
   toQuadRow,
 } from "@/postgres/rdfjs-store/quad-record.ts";
 import { PgQuadStream } from "@/postgres/rdfjs-store/pg-quad-stream.ts";
@@ -60,6 +63,13 @@ export interface PostgresRdfjsStoreOptions {
 
   /** match() page size for keyset pagination (default 1000). */
   matchPageSize?: number;
+
+  /**
+   * search turns on commit-time chunk projection into the search chunks table
+   * (which must exist: see PostgresSearchIndex.ensureSchema). Unset, a commit
+   * writes quads only and the store needs no chunks table.
+   */
+  search?: PostgresCommitSearchOptions;
 }
 
 /**
@@ -127,6 +137,7 @@ export class PostgresRdfjsStore implements rdfjs.Store<rdfjs.Quad> {
   private readonly sql: PostgresSql;
   private readonly tableName: string;
   private readonly matchPageSize: number;
+  private readonly commit: ReturnType<typeof createPostgresCommit>;
   /** serialized write queue: every mutation runs after the previous one. */
   private mutationQueue: Promise<void> = Promise.resolve();
   /** synchronous size approximation, refreshed after every write. */
@@ -136,6 +147,11 @@ export class PostgresRdfjsStore implements rdfjs.Store<rdfjs.Quad> {
     this.sql = options.sql;
     this.tableName = options.tableName ?? "worlds_quads";
     this.matchPageSize = options.matchPageSize ?? 1000;
+    this.commit = createPostgresCommit({
+      sql: options.sql,
+      quadsTableName: this.tableName,
+      search: options.search,
+    });
   }
 
   /**
@@ -195,56 +211,26 @@ export class PostgresRdfjsStore implements rdfjs.Store<rdfjs.Quad> {
   }
 
   /**
-   * applyPatch persists a patch atomically — one SQL transaction.
+   * applyPatch persists a patch atomically, through the shared SQL commit core
+   * (`commitSqlPatch`) in one SQL transaction: the replace-import wipe, the
+   * deletions, the novel quads, and (when `search` is configured) their chunk
+   * rows land together or not at all. Embedding runs before the transaction
+   * opens, so an embedding failure throws with nothing written.
    * context.importMode === "replace" clears the table first (the SDK's
    * replace-import contract).
    */
   public applyPatch(
     patch: Patch,
-    context?: { importMode?: "replace" | "merge" },
+    context?: TransactionContext,
   ): Promise<void> {
-    return this.enqueueWrite(() => {
-      return this.sql.begin(async (tx) => {
-        if (context?.importMode === "replace") {
-          await tx.unsafe(`DELETE FROM ${this.tableName}`);
-        }
-        if (patch.deletions.length > 0) {
-          const keys = patch.deletions.map((quad) => {
-            const [skey, pkey, okey, gkey] = splitQuadKey(quadKey(quad));
-            return { skey, pkey, okey, gkey };
-          });
-          await tx.unsafe(
-            `DELETE FROM ${this.tableName} ` +
-              "WHERE (skey, pkey, okey, gkey) IN (" +
-              "SELECT * FROM json_to_recordset($1::json) AS x(" +
-              "skey TEXT, pkey TEXT, okey TEXT, gkey TEXT))",
-            [JSON.stringify(keys)],
-          );
-        }
-        if (patch.insertions.length > 0) {
-          // Pass the payload as an object (not a string) so the JSONB
-          // recordset column stores a proper JSON object — a string value
-          // would be stored as a JSONB string and break payload->'o' probes.
-          const rows = patch.insertions.map((quad) => {
-            const row = toQuadRow(quad);
-            return {
-              skey: row.skey,
-              pkey: row.pkey,
-              okey: row.okey,
-              gkey: row.gkey,
-              payload: toQuadRecord(quad),
-            };
-          });
-          await tx.unsafe(
-            `INSERT INTO ${this.tableName} (skey, pkey, okey, gkey, payload) ` +
-              "SELECT * FROM json_to_recordset($1::json) AS x(" +
-              "skey TEXT, pkey TEXT, okey TEXT, gkey TEXT, payload JSONB) " +
-              "ON CONFLICT (skey, pkey, okey, gkey) " +
-              "DO UPDATE SET payload = EXCLUDED.payload",
-            [JSON.stringify(rows)],
-          );
-        }
-      });
+    return this.enqueueWrite(async () => {
+      await this.commit({
+        deletions: patch.deletions,
+        // A patch may repeat a quad; one row (and one set of chunks) is enough.
+        insertions: [
+          ...new Map(patch.insertions.map((q) => [quadKey(q), q])).values(),
+        ],
+      }, context);
     });
   }
 

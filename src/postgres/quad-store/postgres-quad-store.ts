@@ -9,6 +9,7 @@ import {
   materializeImportQuads,
 } from "@worlds/sdk/quad-store";
 import { PostgresRdfjsStore } from "@/postgres/rdfjs-store/postgres-rdfjs-store.ts";
+import type { PostgresCommitSearchOptions } from "@/postgres/commit/postgres-commit.ts";
 import type { PostgresSql } from "@/postgres/sql/postgres-sql.ts";
 
 /**
@@ -17,6 +18,9 @@ import type { PostgresSql } from "@/postgres/sql/postgres-sql.ts";
 export interface PostgresQuadStoreOptions {
   sql: PostgresSql;
   tableName?: string;
+
+  /** search turns on commit-time chunk projection (see PostgresRdfjsStoreOptions). */
+  search?: PostgresCommitSearchOptions;
 }
 
 /**
@@ -33,6 +37,7 @@ export class PostgresQuadStore implements QuadStoreInterface {
     this.store = new PostgresRdfjsStore({
       sql: options.sql,
       tableName: options.tableName,
+      search: options.search,
     });
   }
 

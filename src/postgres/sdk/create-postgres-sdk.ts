@@ -1,6 +1,7 @@
 import type { SparqlEngineInterface } from "@wazoo/sparql-engine";
 import { WazooSparqlEngine } from "@wazoo/sparql-engine";
 import { WorldsSdk, type WorldsSdkInterface } from "@worlds/sdk";
+import type { SearchIndexOnImport } from "@worlds/sdk/search-index";
 import type { EmbeddingService } from "@worlds/sdk/search-index/embedding-service";
 import type { TextSplitterInterface } from "@worlds/sdk/search-index/quad-chunker";
 import { PostgresQuadStore } from "@/postgres/quad-store/mod.ts";
@@ -41,10 +42,20 @@ export interface PostgresWorldsSdkOptions {
   ftsLanguage?: string;
 
   /**
-   * textSplitter slices long literal values into multiple chunk rows during
-   * reindex() (defaults to one chunk per textual literal).
+   * textSplitter slices long literal values into multiple chunk rows, at commit
+   * and in reindex() (defaults to one chunk per textual literal).
    */
   textSplitter?: TextSplitterInterface;
+
+  /**
+   * searchIndexOnImport controls when chunk rows are written when an
+   * embeddingService is set (the chunks table is the hybrid index; without a
+   * service no chunk rows are kept). "incremental" (default) projects in every
+   * commit, so an embedding failure rejects the commit with nothing written;
+   * "deferred" skips projection during imports and rebuilds once after them;
+   * "disabled" never projects at commit, leaving reindex() to populate.
+   */
+  searchIndexOnImport?: SearchIndexOnImport;
 
   /**
    * SPARQL engine to wire as the SDK's sparqlEngine. Defaults to a
@@ -66,9 +77,21 @@ export interface PostgresWorldsSdkOptions {
 export async function createPostgresWorldsSdk(
   options: PostgresWorldsSdkOptions,
 ): Promise<WorldsSdkInterface> {
+  // Chunk rows exist only for hybrid search, so they are projected at commit
+  // exactly when an embedding service creates the chunks table.
+  const search = options.embeddingService
+    ? {
+      searchChunksTableName: options.searchChunksTableName,
+      embeddingService: options.embeddingService,
+      vectorDimensions: options.vectorDimensions,
+      textSplitter: options.textSplitter,
+      searchIndexOnImport: options.searchIndexOnImport,
+    }
+    : undefined;
   const store = new PostgresRdfjsStore({
     sql: options.sql,
     tableName: options.tableName,
+    search,
   });
   await store.ensureSchema();
   const searchIndex = new PostgresSearchIndex({
@@ -87,6 +110,7 @@ export async function createPostgresWorldsSdk(
     quadStore: new PostgresQuadStore({
       sql: options.sql,
       tableName: options.tableName,
+      search,
     }),
     sparqlEngine: options.queryEngine ??
       new WazooSparqlEngine({

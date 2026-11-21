@@ -14,6 +14,7 @@
     "jsr:@wazoo/sparql-engine@0.5": "0.5.0",
     "jsr:@worlds/client@0.1": "0.1.0",
     "jsr:@worlds/sdk@~0.9.1": "0.9.1",
+    "jsr:@worlds/sqlite@~0.7.4": "0.7.4",
     "npm:@ai-sdk/google@^4.0.50": "4.0.50_zod@4.4.3",
     "npm:@electric-sql/pglite-pgvector@^0.0.5": "0.0.5_@electric-sql+pglite@0.5.6",
     "npm:@electric-sql/pglite@~0.5.6": "0.5.6",
@@ -89,6 +90,14 @@
         "npm:@types/n3",
         "npm:ai@^6.0.195",
         "npm:n3@^2.0.3"
+      ]
+    },
+    "@worlds/sqlite@0.7.4": {
+      "integrity": "95ccb544ec21468ac552c2a391e0993909596906a2cbb1afd486a13a40587cfe",
+      "dependencies": [
+        "jsr:@wazoo/sparql-engine",
+        "jsr:@worlds/sdk",
+        "npm:@rdfjs/types"
       ]
     }
   },
@@ -718,6 +727,7 @@
       "jsr:@std/path@^1.1.6",
       "jsr:@wazoo/sparql-engine@0.5",
       "jsr:@worlds/sdk@~0.9.1",
+      "jsr:@worlds/sqlite@~0.7.4",
       "npm:@ai-sdk/google@^4.0.50",
       "npm:@electric-sql/pglite-pgvector@^0.0.5",
       "npm:@electric-sql/pglite@~0.5.6",
