@@ -55,6 +55,10 @@ export function createPostgresDialect(
     keyOf: (quad) => quadKey(quad),
     buildWipe: () => [{ sql: `DELETE FROM ${quads}` }, ...clearChunks()],
     buildClearChunks: clearChunks,
+    // One text[] parameter however many hashes, so a page never nears
+    // Postgres's bind-parameter limit.
+    buildDeleteChunks: (hashes) =>
+      chunks ? [buildDeleteChunksStatement(chunks, hashes)] : [],
     buildDeletions: deletions,
     // The core deletes a novel quad's key before inserting it, so nothing
     // conflicts but a duplicate within the statement, which DO NOTHING absorbs.
