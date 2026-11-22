@@ -1,6 +1,6 @@
 /**
  * Runs the shared commit conformance suite (@worlds/sdk/testing) against
- * Postgres's real commit path, over PGlite: all nine cases, with the converged
+ * Postgres's real commit path, over PGlite: all ten cases, with the converged
  * contract (atomic commit, embedding failure throws, replace import keeps the
  * old graph on failure, default mode "incremental").
  *
@@ -36,10 +36,15 @@ Deno.test("PostgresRdfjsStore passes the shared commit conformance suite", async
       result.failures.map((failure) => `${result.name}: ${failure}`)
     );
     assert(
-      report.results.length === 9,
-      `expected 9 cases, ran ${report.results.length}`,
+      report.results.length === 10,
+      `expected 10 cases, ran ${report.results.length}`,
     );
     assert(report.ok, failures.join("\n"));
+    // A skipped case is left out of `results` and named in `notes`.
+    assert(
+      report.results.some((result) => result.name.includes("later-write")),
+      `the later-write case must run: ${report.notes?.join("; ")}`,
+    );
   } finally {
     for (const close of closers) await close();
   }

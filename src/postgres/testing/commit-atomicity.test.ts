@@ -3,7 +3,7 @@
  * Postgres (see commit-conformance.test.ts): a failed commit rolls the whole
  * transaction back, and a failed replace import keeps the old graph.
  */
-import { assertEquals, assertRejects } from "@std/assert";
+import { assert, assertEquals, assertRejects } from "@std/assert";
 import { DataFactory } from "@wazoo/sparql-engine";
 import { FakeEmbeddingService } from "@worlds/sdk/search-index/embedding-service";
 import { createPostgresCommitHarness } from "./postgres-commit-subject.ts";
@@ -64,6 +64,40 @@ Deno.test("a failed replace import keeps the old graph", async () => {
     );
     // The wipe ran in the same transaction as the insert, so it rolled back.
     assertEquals(await keys(harness), ["urn:t:base", "urn:t:three"]);
+  } finally {
+    await harness.close();
+  }
+});
+
+Deno.test("failLaterWrite fails a chunk write after the quad inserts and rolls back", async () => {
+  const harness = await createPostgresCommitHarness(new FakeEmbeddingService());
+  try {
+    await harness.subject.commit({
+      insertions: [text("base")],
+      deletions: [],
+    });
+    harness.subject.failLaterWrite?.();
+    await assertRejects(
+      () =>
+        harness.subject.commit({
+          insertions: [text("one"), text("two")],
+          deletions: [],
+        }),
+      Error,
+      "injected later write failure",
+    );
+    // The spy proves the failure was not the first write: a quad insert ran
+    // first, and the statement that failed is a chunk-row write after it.
+    const ran = harness.sql.lastLaterFailure;
+    const quadInsert = ran.findIndex((q) =>
+      q.startsWith("INSERT INTO worlds_quads")
+    );
+    const failed = ran.length - 1;
+    assert(quadInsert >= 0, `no quad insert ran: ${ran.join(" | ")}`);
+    assert(ran[failed]!.startsWith("INSERT INTO worlds_search_chunks"));
+    assert(quadInsert < failed, "the failure must follow the quad inserts");
+    // The quad inserts rolled back with the transaction.
+    assertEquals(await keys(harness), ["urn:t:base"]);
   } finally {
     await harness.close();
   }
