@@ -18,6 +18,14 @@ export const CONFORMANCE_VECTOR_DIMENSIONS = 32;
  */
 export class FailOnceSql implements PostgresSql {
   private failNext = false;
+  private failLater = false;
+
+  /**
+   * lastLaterFailure is the statements the most recent `failLaterWrite`
+   * transaction ran, in order, ending with the statement that was made to fail.
+   * A test reads it to prove the failure followed the quad writes.
+   */
+  public lastLaterFailure: string[] = [];
 
   /** rebuilds is how many transactions cleared the chunks table alone. */
   public rebuilds = 0;
@@ -27,6 +35,15 @@ export class FailOnceSql implements PostgresSql {
   /** failNextTransaction arms one failure for the next `begin`. */
   public failNextTransaction(): void {
     this.failNext = true;
+  }
+
+  /**
+   * failLaterWriteInNextTransaction arms one failure for the next `begin`: it
+   * throws on the first chunk-row write that follows a quad insert, so the quad
+   * writes have already run inside the open transaction.
+   */
+  public failLaterWriteInNextTransaction(): void {
+    this.failLater = true;
   }
 
   public unsafe<T>(query: string, params?: unknown[]): Promise<T[]> {
@@ -40,9 +57,19 @@ export class FailOnceSql implements PostgresSql {
   ): Promise<T> {
     return this.inner.begin(async (tx) => {
       const run: string[] = [];
+      const armedLater = this.failLater;
+      this.failLater = false;
       const result = await fn({
         unsafe: (query, params) => {
           run.push(query);
+          if (
+            armedLater &&
+            query.startsWith("INSERT INTO worlds_search_chunks") &&
+            run.some((q) => q.startsWith("INSERT INTO worlds_quads"))
+          ) {
+            this.lastLaterFailure = [...run];
+            return Promise.reject(new Error("injected later write failure"));
+          }
           return tx.unsafe(query, params);
         },
       });
@@ -112,6 +139,7 @@ export async function createPostgresCommitHarness(
       return rows.map((row) => row.id.split("#")[0]!);
     },
     failNextWrite: () => sql.failNextTransaction(),
+    failLaterWrite: () => sql.failLaterWriteInNextTransaction(),
     fullRebuildCount: () => sql.rebuilds,
   };
   return { sql, store, index, subject, close: () => sql.end() };

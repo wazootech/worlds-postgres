@@ -140,7 +140,7 @@ transaction.
 in-memory reference (`@worlds/sdk/memory`) over PGlite — search ordering is
 compared set-wise, since SQL keyword-scan order is not a parity contract. The
 shared commit conformance suite (`runCommitConformanceSuite`) runs against the
-real commit path too, with all nine cases and the converged contract (atomic
+real commit path too, with all ten cases and the converged contract (atomic
 commit, embedding failure throws, default `"incremental"`); see
 `src/postgres/testing/commit-conformance.test.ts`.
 
