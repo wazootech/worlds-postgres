@@ -1,11 +1,9 @@
-import type { QuadFilter } from "@worlds/sdk/quad-store";
 import type { SqlCommitDriver } from "@worlds/sqlite/sql-core";
 import {
   fromQuadRow,
   type QuadRow,
   splitQuadKey,
 } from "@/postgres/rdfjs-store/quad-record.ts";
-import { quadFilterSql } from "@/postgres/search-index/quad-filter-sql.ts";
 import type { PostgresSql } from "@/postgres/sql/postgres-sql.ts";
 
 /** PostgresStatement is one parameterized statement for `PostgresSql.unsafe`. */
@@ -33,9 +31,6 @@ export interface PostgresCommitDriverOptions {
 
   /** quadsTableName is the quads table. */
   quadsTableName: string;
-
-  /** filter scopes `streamQuads` to the quads a scoped reindex covers. */
-  filter?: QuadFilter;
 }
 
 /** QuadCursor is the keyset position after the last paged quad. */
@@ -49,7 +44,7 @@ type QuadCursor = readonly [string, string, string, string];
 export function createPostgresCommitDriver(
   options: PostgresCommitDriverOptions,
 ): SqlCommitDriver<PostgresStatement> {
-  const { sql, quadsTableName, filter } = options;
+  const { sql, quadsTableName } = options;
   return {
     maxAtomicStatements: MAX_ATOMIC_STATEMENTS,
     writeBatchSize: WRITE_BATCH_SIZE,
@@ -89,7 +84,7 @@ export function createPostgresCommitDriver(
         params.push(value);
         return `$${params.length}`;
       };
-      const where = [...quadFilterSql(bind, filter?.include, filter?.exclude)];
+      const where: string[] = [];
       if (after) {
         const [skey, pkey, okey, gkey] = (after as QuadCursor).map(bind);
         where.push(

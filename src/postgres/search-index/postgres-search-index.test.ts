@@ -445,7 +445,8 @@ Deno.test(
       const scoped = await index.reindex({
         include: { subjects: ["http://example.org/gregory"] },
       });
-      assertEquals(scoped.processedQuadCount, 1);
+      // processedQuadCount counts every stored quad scanned, in scope or not.
+      assertEquals(scoped.processedQuadCount, 2);
       assertEquals(scoped.chunkRowCount, 1);
       const chunkRows = await sql.unsafe<{ subject: string }>(
         "SELECT subject FROM worlds_search_chunks",
