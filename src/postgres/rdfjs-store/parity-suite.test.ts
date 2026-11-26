@@ -24,48 +24,45 @@ async function createFreshPostgresWorldsSdk(): Promise<WorldsSdkInterface> {
   return await createPostgresWorldsSdk({ sql });
 }
 
-test(
-  "parity suite - @worlds/postgres agrees with the in-memory reference on the full corpus",
-  async () => {
-    const report = await runParitySuite({
-      reference: () => createMemoryWorldsSdk(),
-      candidate: () => createFreshPostgresWorldsSdk(),
-      strictSearchOrder: false,
-    });
+test("parity suite - @worlds/postgres agrees with the in-memory reference on the full corpus", async () => {
+  const report = await runParitySuite({
+    reference: () => createMemoryWorldsSdk(),
+    candidate: () => createFreshPostgresWorldsSdk(),
+    strictSearchOrder: false,
+  });
 
+  assert.deepStrictEqual(
+    report.results.length,
+    parityCorpus.fixtures.length + parityCorpus.replaceCases.length,
+    "every corpus fixture and replace case runs on both stores",
+  );
+  assert.deepStrictEqual(
+    report.ok,
+    true,
+    report.results
+      .map(
+        (r) =>
+          `${r.name}: ${r.failures.join("; ")}` +
+          `${r.notes ? ` [notes: ${r.notes.join("; ")}]` : ""}`,
+      )
+      .join("\n"),
+  );
+
+  // The reference-gated fixtures must be clean on both stores — any
+  // divergence there is a real parity break, not a declared-category note.
+  const referenceGated = report.results.filter(
+    (r) => r.name !== "rdfStarWorld",
+  );
+  for (const result of referenceGated) {
     assert.deepStrictEqual(
-      report.results.length,
-      parityCorpus.fixtures.length + parityCorpus.replaceCases.length,
-      "every corpus fixture and replace case runs on both stores",
-    );
-    assert.deepStrictEqual(
-      report.ok,
+      result.ok,
       true,
-      report.results
-        .map(
-          (r) =>
-            `${r.name}: ${r.failures.join("; ")}` +
-            `${r.notes ? ` [notes: ${r.notes.join("; ")}]` : ""}`,
-        )
-        .join("\n"),
+      `${result.name}: ${result.failures.join("; ")}`,
     );
-
-    // The reference-gated fixtures must be clean on both stores — any
-    // divergence there is a real parity break, not a declared-category note.
-    const referenceGated = report.results.filter(
-      (r) => r.name !== "rdfStarWorld",
+    assert.deepStrictEqual(
+      result.notes,
+      undefined,
+      `${result.name} must have no notes`,
     );
-    for (const result of referenceGated) {
-      assert.deepStrictEqual(
-        result.ok,
-        true,
-        `${result.name}: ${result.failures.join("; ")}`,
-      );
-      assert.deepStrictEqual(
-        result.notes,
-        undefined,
-        `${result.name} must have no notes`,
-      );
-    }
-  },
-);
+  }
+});

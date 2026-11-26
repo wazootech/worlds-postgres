@@ -17,18 +17,15 @@ export class PGliteSql implements PostgresSql {
     private readonly exec: (query: string) => Promise<unknown>,
   ) {}
 
-  public async unsafe<T>(
-    query: string,
-    params?: unknown[],
-  ): Promise<T[]> {
+  public async unsafe<T>(query: string, params?: unknown[]): Promise<T[]> {
     const result = await this.db.query<T>(query, params ?? []);
     return result.rows;
   }
 
   public begin<T>(
-    fn: (
-      tx: { unsafe<T2>(query: string, params?: unknown[]): Promise<T2[]> },
-    ) => Promise<T>,
+    fn: (tx: {
+      unsafe<T2>(query: string, params?: unknown[]): Promise<T2[]>;
+    }) => Promise<T>,
   ): Promise<T> {
     return this.db.transaction(async (tx) => {
       return await fn({

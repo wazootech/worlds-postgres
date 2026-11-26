@@ -28,9 +28,13 @@ const textQuad = (name: string, graph = "urn:t:g") =>
   );
 
 const chunkSubjects = async (harness: PostgresCommitHarness) =>
-  (await harness.sql.unsafe<{ subject: string }>(
-    "SELECT subject FROM worlds_search_chunks",
-  )).map((row) => row.subject).sort();
+  (
+    await harness.sql.unsafe<{ subject: string }>(
+      "SELECT subject FROM worlds_search_chunks",
+    )
+  )
+    .map((row) => row.subject)
+    .sort();
 
 test("the SDK factory projects chunks at commit, so import is searchable without reindex", async () => {
   const sql = await createPGliteSql();
@@ -48,7 +52,10 @@ test("the SDK factory projects chunks at commit, so import is searchable without
       },
     });
     const { results } = await sdk.search({ query: "pelican" });
-    assert.deepStrictEqual(results?.map((hit) => hit.subject), ["urn:t:a"]);
+    assert.deepStrictEqual(
+      results?.map((hit) => hit.subject),
+      ["urn:t:a"],
+    );
   } finally {
     await sql.end();
   }

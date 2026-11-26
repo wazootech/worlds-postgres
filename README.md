@@ -37,14 +37,14 @@ With an import map:
 
 ```html
 <script type="importmap">
-{
-  "imports": {
-    "@worlds/postgres": "https://esm.sh/jsr/@worlds/postgres@0.2.0"
+  {
+    "imports": {
+      "@worlds/postgres": "https://esm.sh/jsr/@worlds/postgres@0.2.0"
+    }
   }
-}
 </script>
 <script type="module">
-import { createPostgresWorldsSdk } from "@worlds/postgres";
+  import { createPostgresWorldsSdk } from "@worlds/postgres";
 </script>
 ```
 

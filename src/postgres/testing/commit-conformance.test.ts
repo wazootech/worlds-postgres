@@ -34,7 +34,7 @@ test("PostgresRdfjsStore passes the shared commit conformance suite", async () =
       },
     });
     const failures = report.results.flatMap((result) =>
-      result.failures.map((failure) => `${result.name}: ${failure}`)
+      result.failures.map((failure) => `${result.name}: ${failure}`),
     );
     assert(
       report.results.length === 10,

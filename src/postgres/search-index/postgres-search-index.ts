@@ -116,11 +116,11 @@ export class PostgresSearchIndex implements SearchIndexInterface {
   constructor(options: PostgresSearchIndexOptions) {
     this.sql = options.sql;
     this.tableName = options.quadsTableName ?? "worlds_quads";
-    this.chunksTableName = options.searchChunksTableName ??
-      DEFAULT_CHUNKS_TABLE;
+    this.chunksTableName =
+      options.searchChunksTableName ?? DEFAULT_CHUNKS_TABLE;
     this.embeddingService = options.embeddingService;
-    this.vectorDimensions = options.vectorDimensions ??
-      DEFAULT_VECTOR_DIMENSION;
+    this.vectorDimensions =
+      options.vectorDimensions ?? DEFAULT_VECTOR_DIMENSION;
     this.ftsLanguage = options.ftsLanguage ?? "english";
     this.textSplitter = options.textSplitter ?? IDENTITY_TEXT_SPLITTER;
     // Validate eagerly so a typo surfaces at construction, not at query time.
@@ -174,12 +174,14 @@ export class PostgresSearchIndex implements SearchIndexInterface {
 
     // Case-insensitive substring, escaping LIKE wildcards so the query is
     // treated literally (matching the reference's String.includes).
-    const escaped = query.replaceAll("\\", "\\\\").replaceAll("%", "\\%")
+    const escaped = query
+      .replaceAll("\\", "\\\\")
+      .replaceAll("%", "\\%")
       .replaceAll("_", "\\_");
     where.push(
-      `lower(payload->'o'->>'v') LIKE '%' || lower(${
-        bind(escaped)
-      }) || '%' ESCAPE '\\'`,
+      `lower(payload->'o'->>'v') LIKE '%' || lower(${bind(
+        escaped,
+      )}) || '%' ESCAPE '\\'`,
     );
 
     const scoping = {
@@ -187,8 +189,8 @@ export class PostgresSearchIndex implements SearchIndexInterface {
     };
     where.push(...scoping.where);
 
-    const sqlText = `SELECT payload FROM ${this.tableName}` +
-      ` WHERE ${where.join(" AND ")}`;
+    const sqlText =
+      `SELECT payload FROM ${this.tableName}` + ` WHERE ${where.join(" AND ")}`;
     const rows = await this.sql.unsafe<{ payload: string }>(sqlText, params);
 
     const results: SearchResult[] = [];
@@ -283,9 +285,8 @@ export class PostgresSearchIndex implements SearchIndexInterface {
     const hasVector = !!options.vectorJson;
 
     const scoping = this.chunkFilterSql(bind, request.include, request.exclude);
-    const filterClause = scoping.where.length > 0
-      ? `WHERE ${scoping.where.join(" AND ")}`
-      : "";
+    const filterClause =
+      scoping.where.length > 0 ? `WHERE ${scoping.where.join(" AND ")}` : "";
 
     if (hasVector && hasKeyword) {
       const langParam = bind(this.ftsLanguage);
@@ -376,7 +377,8 @@ export class PostgresSearchIndex implements SearchIndexInterface {
     }
 
     return {
-      sql: `SELECT NULL::text AS subject, NULL::text AS predicate, ` +
+      sql:
+        `SELECT NULL::text AS subject, NULL::text AS predicate, ` +
         `NULL::text AS graph, NULL::text AS text, 0::numeric AS combined_rank ` +
         `WHERE 1 = 0`,
       params: [],
@@ -475,13 +477,16 @@ export class PostgresSearchIndex implements SearchIndexInterface {
    * not one transaction, because embedding calls an external service.
    */
   async reindex(request?: ReindexRequest): Promise<ReindexResponse> {
-    return await rebuildPostgresChunks({
-      sql: this.sql,
-      quadsTableName: this.tableName,
-      searchChunksTableName: this.chunksTableName,
-      embeddingService: this.embeddingService,
-      vectorDimensions: this.vectorDimensions,
-      textSplitter: this.textSplitter,
-    }, request);
+    return await rebuildPostgresChunks(
+      {
+        sql: this.sql,
+        quadsTableName: this.tableName,
+        searchChunksTableName: this.chunksTableName,
+        embeddingService: this.embeddingService,
+        vectorDimensions: this.vectorDimensions,
+        textSplitter: this.textSplitter,
+      },
+      request,
+    );
   }
 }

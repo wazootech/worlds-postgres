@@ -11,8 +11,7 @@ import {
 } from "./search-projection.ts";
 
 /** PostgresCommitSearchOptions turns on commit-time chunk projection. */
-export interface PostgresCommitSearchOptions
-  extends PostgresSearchProjectionOptions {
+export interface PostgresCommitSearchOptions extends PostgresSearchProjectionOptions {
   /**
    * searchIndexOnImport controls when chunk rows are written. "incremental"
    * (the default) projects in every commit; "deferred" skips projection during
@@ -50,7 +49,7 @@ export function createPostgresCommit(
   const dialect = createPostgresDialect({
     quadsTableName,
     chunksTableName: search
-      ? search.searchChunksTableName ?? DEFAULT_CHUNKS_TABLE
+      ? (search.searchChunksTableName ?? DEFAULT_CHUNKS_TABLE)
       : undefined,
   });
   const commitOptions = {

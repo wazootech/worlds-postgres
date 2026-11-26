@@ -35,11 +35,16 @@ class ScriptedEmbeddings implements EmbeddingService {
     if (this.failOnCall === this.calls.length) {
       return Promise.reject(new Error("embedding service unavailable"));
     }
-    return Promise.resolve(texts.map(() => {
-      const vector = Array.from({ length: CONFORMANCE_VECTOR_DIMENSIONS }, () => 0);
-      vector[0] = this.version;
-      return vector;
-    }));
+    return Promise.resolve(
+      texts.map(() => {
+        const vector = Array.from(
+          { length: CONFORMANCE_VECTOR_DIMENSIONS },
+          () => 0,
+        );
+        vector[0] = this.version;
+        return vector;
+      }),
+    );
   }
 }
 
@@ -47,14 +52,17 @@ class ScriptedEmbeddings implements EmbeddingService {
 async function versions(
   harness: PostgresCommitHarness,
 ): Promise<Record<string, number | null>> {
-  const rows = await harness.sql.unsafe<
-    { subject: string; embedding: string | null }
-  >("SELECT subject, embedding::text AS embedding FROM worlds_search_chunks");
+  const rows = await harness.sql.unsafe<{
+    subject: string;
+    embedding: string | null;
+  }>("SELECT subject, embedding::text AS embedding FROM worlds_search_chunks");
   return Object.fromEntries(
-    rows.map((row) => [
-      row.subject,
-      row.embedding === null ? null : JSON.parse(row.embedding)[0],
-    ]).sort(([a], [b]) => String(a).localeCompare(String(b))),
+    rows
+      .map((row) => [
+        row.subject,
+        row.embedding === null ? null : JSON.parse(row.embedding)[0],
+      ])
+      .sort(([a], [b]) => String(a).localeCompare(String(b))),
   );
 }
 

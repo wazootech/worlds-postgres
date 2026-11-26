@@ -19,9 +19,9 @@ export interface PostgresSql {
    * rollback on throw). The callback receives a transaction-scoped unsafe.
    */
   begin<T>(
-    fn: (
-      tx: { unsafe<T2>(query: string, params?: unknown[]): Promise<T2[]> },
-    ) => Promise<T>,
+    fn: (tx: {
+      unsafe<T2>(query: string, params?: unknown[]): Promise<T2[]>;
+    }) => Promise<T>,
   ): Promise<T>;
 
   /** end closes the underlying connection(s). */
