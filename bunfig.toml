@@ -1,5 +1,5 @@
 [install]
-# One-day supply-chain delay, as deno.json's minimumDependencyAge enforces.
+# One-day supply-chain delay (the policy deno.json's minimumDependencyAge enforced).
 # First-party JSR packages are excluded so a just-published release resolves.
 minimumReleaseAge = 86400
 minimumReleaseAgeExcludes = [

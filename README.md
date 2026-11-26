@@ -135,7 +135,7 @@ transaction.
 
 ## Parity
 
-`deno task ci` runs a full-corpus parity suite (`runParitySuite` from
+`bun run ci` runs a full-corpus parity suite (`runParitySuite` from
 `@worlds/sdk/testing`) comparing `createPostgresWorldsSdk` against the portable
 in-memory reference (`@worlds/sdk/memory`) over PGlite — search ordering is
 compared set-wise, since SQL keyword-scan order is not a parity contract. The
@@ -147,13 +147,14 @@ commit, embedding failure throws, default `"incremental"`); see
 ## Development
 
 ```bash
-deno task ci
+bun install
+bun run ci
 ```
 
 Dry-run a JSR publish locally:
 
 ```bash
-deno task publish:dry
+bun run publish:dry
 ```
 
 ## Publishing to JSR
@@ -166,8 +167,8 @@ which publishes only when `deno.json`'s `version` is not yet on JSR:
 - **Routine PR** (no bump): the Publish job skips green with a notice. That is
   expected, not a failure.
 
-To release, bump `version` in `deno.json` (minor for additive public API, patch
-for fixes) in the PR that should ship. If the package ever imports a pinned
-`jsr:@worlds/postgres@<version>` of itself, commit that entry to `deno.lock`;
-otherwise a cold CI run rewrites the lockfile and `deno publish` aborts on the
-dirty tree.
+To release, bump `version` in `jsr.json` (minor for additive public API, patch
+for fixes) in the PR that should ship, and keep `package.json`'s dependency
+ranges in step with `jsr.json`'s imports (`bun run check:manifests` fails CI
+otherwise). The publish goes through `bunx jsr publish`; `deno.lock` is
+regenerated on every run and is git-ignored so the tree stays clean.
