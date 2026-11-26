@@ -3,7 +3,8 @@
 // owns its copy of termKey (it must not import the engine), so this suite
 // pins the two implementations together on a term corpus covering every
 // termType, literal language/datatype, and RDF-star nesting.
-import { assertEquals } from "@std/assert";
+import test from "node:test";
+import assert from "node:assert/strict";
 import { DataFactory } from "@wazoo/sparql-engine";
 import { termKey as engineTermKey } from "@wazoo/sparql-engine/term";
 import { termKey as localTermKey } from "@/postgres/term/term-key.ts";
@@ -34,11 +35,11 @@ const corpus = [
   ),
 ];
 
-Deno.test(
+test(
   "term-key parity — @worlds/postgres matches @wazoo/sparql-engine on the term corpus",
   () => {
     for (const term of corpus) {
-      assertEquals(
+      assert.deepStrictEqual(
         localTermKey(term),
         engineTermKey(term),
         `termKey mismatch for ${term.termType}: ${term.value}`,
@@ -47,7 +48,7 @@ Deno.test(
   },
 );
 
-Deno.test("term-key parity — distinct terms never collide", () => {
+test("term-key parity — distinct terms never collide", () => {
   const keys = new Set(corpus.map((term) => localTermKey(term)));
-  assertEquals(keys.size, corpus.length);
+  assert.deepStrictEqual(keys.size, corpus.length);
 });

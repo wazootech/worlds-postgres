@@ -5,7 +5,9 @@
  * 1/(60 + rank)), reindex() embedding population with keyset pagination,
  * ftsLanguage, and the keyword-parity scan — all against a live database.
  */
-import { assertAlmostEquals, assertEquals, assertRejects } from "@std/assert";
+import test from "node:test";
+import assert from "node:assert/strict";
+import { assertAlmostEquals, rejected } from "@/postgres/testing/assertions.ts";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { DataFactory } from "@wazoo/sparql-engine";
 import type { Quad } from "@rdfjs/types";
@@ -170,7 +172,7 @@ async function hybridIndex(): Promise<FreshIndex> {
   return fresh;
 }
 
-Deno.test(
+test(
   "keyword-only search scans live quads with the reference's exact semantics",
   async () => {
     const { index, sql, close } = await freshIndex();
@@ -184,61 +186,61 @@ Deno.test(
       ]);
 
       const res = hits(await index.search({ query: "BAGELS" }));
-      assertEquals(res.length, 1);
-      assertEquals(res[0]!.text, "Ethan loves bagels");
-      assertEquals(res[0]!.subject, "http://example.org/ethan");
-      assertEquals(res[0]!.score, 1.0);
+      assert.deepStrictEqual(res.length, 1);
+      assert.deepStrictEqual(res[0]!.text, "Ethan loves bagels");
+      assert.deepStrictEqual(res[0]!.subject, "http://example.org/ethan");
+      assert.deepStrictEqual(res[0]!.score, 1.0);
 
       // Case-insensitive substring, like the reference's String.includes.
       const partial = hits(await index.search({ query: "loves ba" }));
-      assertEquals(partial.length, 1);
+      assert.deepStrictEqual(partial.length, 1);
       const none = hits(await index.search({ query: "croissant" }));
-      assertEquals(none.length, 0);
+      assert.deepStrictEqual(none.length, 0);
     } finally {
       await close();
     }
   },
 );
 
-Deno.test(
+test(
   "hybrid search fuses keyword FTS and vector ranks with 1/(60 + rank) RRF",
   async () => {
     const { index, close } = await hybridIndex();
     try {
       const res = hits(await index.search({ query: "bagels" }));
-      assertEquals(res.length, 4);
+      assert.deepStrictEqual(res.length, 4);
 
       const [ethan, wendy, gregory, sandra] = res;
       // Ethan matches both branches at rank 1: 1/61 + 1/61.
-      assertEquals(ethan!.text, "Ethan loves bagels");
-      assertAlmostEquals(ethan!.score, 2 / 61, 6);
+      assert.deepStrictEqual(ethan!.text, "Ethan loves bagels");
+      assertAlmostEquals(ethan!.score, 2 / 61);
       // The rest match the vector branch only, ranked by cosine distance.
-      assertEquals(wendy!.text, "Wendy studies databases");
-      assertAlmostEquals(wendy!.score, 1 / 62, 6);
-      assertEquals(gregory!.text, "Gregory loves donuts");
-      assertAlmostEquals(gregory!.score, 1 / 63, 6);
-      assertEquals(sandra!.text, "Sandra likes pizza");
-      assertAlmostEquals(sandra!.score, 1 / 64, 6);
+      assert.deepStrictEqual(wendy!.text, "Wendy studies databases");
+      assertAlmostEquals(wendy!.score, 1 / 62);
+      assert.deepStrictEqual(gregory!.text, "Gregory loves donuts");
+      assertAlmostEquals(gregory!.score, 1 / 63);
+      assert.deepStrictEqual(sandra!.text, "Sandra likes pizza");
+      assertAlmostEquals(sandra!.score, 1 / 64);
 
       // topK truncates the fused ranking.
       const top2 = hits(await index.search({ query: "bagels", topK: 2 }));
-      assertEquals(top2.length, 2);
-      assertEquals(top2[0]!.text, "Ethan loves bagels");
-      assertEquals(top2[1]!.text, "Wendy studies databases");
+      assert.deepStrictEqual(top2.length, 2);
+      assert.deepStrictEqual(top2[0]!.text, "Ethan loves bagels");
+      assert.deepStrictEqual(top2[1]!.text, "Wendy studies databases");
 
       // minScore filters the fused scores.
       const minScore = hits(
         await index.search({ query: "bagels", minScore: 0.02 }),
       );
-      assertEquals(minScore.length, 1);
-      assertEquals(minScore[0]!.text, "Ethan loves bagels");
+      assert.deepStrictEqual(minScore.length, 1);
+      assert.deepStrictEqual(minScore[0]!.text, "Ethan loves bagels");
     } finally {
       await close();
     }
   },
 );
 
-Deno.test(
+test(
   "hybrid search scopes by QuadFilter include/exclude on chunk columns",
   async () => {
     const { index, close } = await hybridIndex();
@@ -249,8 +251,8 @@ Deno.test(
           include: { subjects: ["http://example.org/gregory"] },
         }),
       );
-      assertEquals(includeSubject.length, 1);
-      assertEquals(includeSubject[0]!.text, "Gregory loves donuts");
+      assert.deepStrictEqual(includeSubject.length, 1);
+      assert.deepStrictEqual(includeSubject[0]!.text, "Gregory loves donuts");
 
       const excludePredicate = hits(
         await index.search({
@@ -258,14 +260,14 @@ Deno.test(
           exclude: { predicates: [EX_ABOUT] },
         }),
       );
-      assertEquals(excludePredicate.length, 0);
+      assert.deepStrictEqual(excludePredicate.length, 0);
     } finally {
       await close();
     }
   },
 );
 
-Deno.test(
+test(
   "hybrid search scopes graphs: named graph IRI or empty string for the default graph",
   async () => {
     const fresh = await freshIndex({
@@ -286,8 +288,8 @@ Deno.test(
           include: { graphs: ["urn:g1"] },
         }),
       );
-      assertEquals(named.length, 1);
-      assertEquals(named[0]!.subject, "http://example.org/maya");
+      assert.deepStrictEqual(named.length, 1);
+      assert.deepStrictEqual(named[0]!.subject, "http://example.org/maya");
 
       const defaultGraph = hits(
         await index.search({
@@ -295,8 +297,11 @@ Deno.test(
           include: { graphs: [""] },
         }),
       );
-      assertEquals(defaultGraph.length, 1);
-      assertEquals(defaultGraph[0]!.subject, "http://example.org/ethan");
+      assert.deepStrictEqual(defaultGraph.length, 1);
+      assert.deepStrictEqual(
+        defaultGraph[0]!.subject,
+        "http://example.org/ethan",
+      );
 
       const excludeNamed = hits(
         await index.search({
@@ -304,15 +309,18 @@ Deno.test(
           exclude: { graphs: ["urn:g1"] },
         }),
       );
-      assertEquals(excludeNamed.length, 1);
-      assertEquals(excludeNamed[0]!.subject, "http://example.org/ethan");
+      assert.deepStrictEqual(excludeNamed.length, 1);
+      assert.deepStrictEqual(
+        excludeNamed[0]!.subject,
+        "http://example.org/ethan",
+      );
     } finally {
       await close();
     }
   },
 );
 
-Deno.test(
+test(
   "hybrid search degrades to FTS-only when query-time embedding fails",
   async () => {
     // Reindex with text-only chunks (no embedding service), then search with
@@ -332,16 +340,16 @@ Deno.test(
         vectorDimensions: 3,
       });
       const res = hits(await degraded.search({ query: "bagels" }));
-      assertEquals(res.length, 1);
-      assertEquals(res[0]!.text, "Ethan loves bagels");
-      assertAlmostEquals(res[0]!.score, 1 / 61, 6);
+      assert.deepStrictEqual(res.length, 1);
+      assert.deepStrictEqual(res[0]!.text, "Ethan loves bagels");
+      assertAlmostEquals(res[0]!.score, 1 / 61);
     } finally {
       await close();
     }
   },
 );
 
-Deno.test(
+test(
   "hybrid search runs the vector branch alone for an empty query",
   async () => {
     const { index, close } = await hybridIndex();
@@ -350,23 +358,23 @@ Deno.test(
       // the vector branch alone ranks by cosine distance: ethan 1/61,
       // wendy 1/62, gregory 1/63, sandra 1/64.
       const res = hits(await index.search({ query: "" }));
-      assertEquals(res.length, 4);
+      assert.deepStrictEqual(res.length, 4);
       const [ethan, wendy, gregory, sandra] = res;
-      assertEquals(ethan!.text, "Ethan loves bagels");
-      assertAlmostEquals(ethan!.score, 1 / 61, 6);
-      assertEquals(wendy!.text, "Wendy studies databases");
-      assertAlmostEquals(wendy!.score, 1 / 62, 6);
-      assertEquals(gregory!.text, "Gregory loves donuts");
-      assertAlmostEquals(gregory!.score, 1 / 63, 6);
-      assertEquals(sandra!.text, "Sandra likes pizza");
-      assertAlmostEquals(sandra!.score, 1 / 64, 6);
+      assert.deepStrictEqual(ethan!.text, "Ethan loves bagels");
+      assertAlmostEquals(ethan!.score, 1 / 61);
+      assert.deepStrictEqual(wendy!.text, "Wendy studies databases");
+      assertAlmostEquals(wendy!.score, 1 / 62);
+      assert.deepStrictEqual(gregory!.text, "Gregory loves donuts");
+      assertAlmostEquals(gregory!.score, 1 / 63);
+      assert.deepStrictEqual(sandra!.text, "Sandra likes pizza");
+      assertAlmostEquals(sandra!.score, 1 / 64);
     } finally {
       await close();
     }
   },
 );
 
-Deno.test(
+test(
   "reindex keyset-paginates every quad and populates chunk embeddings",
   async () => {
     const fresh = await freshIndex({
@@ -396,39 +404,39 @@ Deno.test(
       // 17 quads, page size 5 → 4 pages. The keyset fix means every quad is
       // processed (the old LIMIT-only scan stopped after the first page).
       const report = await index.reindex({ readPageSize: 5 });
-      assertEquals(report.processedQuadCount, 17);
-      assertEquals(report.chunkRowCount, 15);
+      assert.deepStrictEqual(report.processedQuadCount, 17);
+      assert.deepStrictEqual(report.chunkRowCount, 15);
 
       const embedded = await sql.unsafe<{ count: string }>(
         "SELECT COUNT(*) AS count FROM worlds_search_chunks " +
           "WHERE embedding IS NOT NULL",
       );
-      assertEquals(Number(embedded[0]!.count), 15);
+      assert.deepStrictEqual(Number(embedded[0]!.count), 15);
 
       const bagelRow = await sql.unsafe<{ embedding: string }>(
         "SELECT embedding::text AS embedding FROM worlds_search_chunks " +
           "WHERE subject = $1",
         ["http://example.org/s0"],
       );
-      assertEquals(bagelRow[0]!.embedding, "[1,0]");
+      assert.deepStrictEqual(bagelRow[0]!.embedding, "[1,0]");
       const donutRow = await sql.unsafe<{ embedding: string }>(
         "SELECT embedding::text AS embedding FROM worlds_search_chunks " +
           "WHERE subject = $1",
         ["http://example.org/s1"],
       );
-      assertEquals(donutRow[0]!.embedding, "[0,1]");
+      assert.deepStrictEqual(donutRow[0]!.embedding, "[0,1]");
 
       // Idempotent rerun reports the same counts.
       const again = await index.reindex({ readPageSize: 5 });
-      assertEquals(again.processedQuadCount, 17);
-      assertEquals(again.chunkRowCount, 15);
+      assert.deepStrictEqual(again.processedQuadCount, 17);
+      assert.deepStrictEqual(again.chunkRowCount, 15);
     } finally {
       await close();
     }
   },
 );
 
-Deno.test(
+test(
   "reindex honors the QuadFilter include scope and validates embedding length",
   async () => {
     const fresh = await freshIndex({
@@ -446,13 +454,16 @@ Deno.test(
         include: { subjects: ["http://example.org/gregory"] },
       });
       // processedQuadCount counts every stored quad scanned, in scope or not.
-      assertEquals(scoped.processedQuadCount, 2);
-      assertEquals(scoped.chunkRowCount, 1);
+      assert.deepStrictEqual(scoped.processedQuadCount, 2);
+      assert.deepStrictEqual(scoped.chunkRowCount, 1);
       const chunkRows = await sql.unsafe<{ subject: string }>(
         "SELECT subject FROM worlds_search_chunks",
       );
-      assertEquals(chunkRows.length, 1);
-      assertEquals(chunkRows[0]!.subject, "http://example.org/gregory");
+      assert.deepStrictEqual(chunkRows.length, 1);
+      assert.deepStrictEqual(
+        chunkRows[0]!.subject,
+        "http://example.org/gregory",
+      );
 
       // A 3-dim embedding against a configured vectorDimensions of 2 must
       // be rejected up front.
@@ -466,12 +477,12 @@ Deno.test(
         ]);
         // The shared chunkAndEmbedQuads wraps the failure; the cause names
         // the mismatch.
-        const error = await assertRejects(
+        const error = await rejected(
           () => mismatched.index.reindex(),
           Error,
           "failed to vectorize literal chunk blocks",
         );
-        assertEquals(
+        assert.deepStrictEqual(
           (error.cause as Error).message.includes("vectorDimensions"),
           true,
         );
@@ -484,7 +495,7 @@ Deno.test(
   },
 );
 
-Deno.test(
+test(
   "ftsLanguage flows into the generated tsvector and hybrid queries",
   async () => {
     // 'simple' does not stem: the exact token "bagels" matches, but the
@@ -509,21 +520,21 @@ Deno.test(
 
       // Exact token: FTS branch (rank 1) + vector branch (rank 1) = 2/61.
       const exact = hits(await index.search({ query: "bagels" }));
-      assertEquals(exact.length, 1);
-      assertAlmostEquals(exact[0]!.score, 2 / 61, 6);
+      assert.deepStrictEqual(exact.length, 1);
+      assertAlmostEquals(exact[0]!.score, 2 / 61);
 
       // Stemmed spelling: 'simple' matches no token, so only the vector
       // branch contributes (rank 1) = 1/61.
       const stemmed = hits(await index.search({ query: "bagel" }));
-      assertEquals(stemmed.length, 1);
-      assertAlmostEquals(stemmed[0]!.score, 1 / 61, 6);
+      assert.deepStrictEqual(stemmed.length, 1);
+      assertAlmostEquals(stemmed[0]!.score, 1 / 61);
     } finally {
       await close();
     }
   },
 );
 
-Deno.test(
+test(
   "reindex splits long literals into multiple chunk rows via the textSplitter",
   async () => {
     const longText =
@@ -535,7 +546,7 @@ Deno.test(
       chunkOverlap: 0,
     });
     const expectedDocs = await splitter.createDocuments([longText]);
-    assertEquals(expectedDocs.length, 6);
+    assert.deepStrictEqual(expectedDocs.length, 6);
 
     const { sql, close } = await freshIndex({ vectorDimensions: 1 });
     try {
@@ -551,9 +562,9 @@ Deno.test(
         textSplitter: splitter,
       });
       const report = await splitIndex.reindex({ readPageSize: 5 });
-      assertEquals(report.processedQuadCount, 2);
+      assert.deepStrictEqual(report.processedQuadCount, 2);
       // 6 split pieces for Ethan's long literal + 1 for Gregory's.
-      assertEquals(report.chunkRowCount, 7);
+      assert.deepStrictEqual(report.chunkRowCount, 7);
 
       const ethanRows = await sql.unsafe<{
         id: string;
@@ -564,18 +575,18 @@ Deno.test(
           "FROM worlds_search_chunks WHERE subject = $1 ORDER BY id",
         ["http://example.org/ethan"],
       );
-      assertEquals(ethanRows.length, 6);
-      assertEquals(
+      assert.deepStrictEqual(ethanRows.length, 6);
+      assert.deepStrictEqual(
         ethanRows.map((row) => row.text),
         expectedDocs.map((doc) => doc.pageContent),
       );
       // Every split piece is embedded; only the piece containing "bagels"
       // gets [1], the rest [-1] (non-zero, so HNSW keeps indexing them).
-      assertEquals(
+      assert.deepStrictEqual(
         ethanRows.filter((row) => row.embedding === "[1]").length,
         1,
       );
-      assertEquals(
+      assert.deepStrictEqual(
         ethanRows.filter((row) => row.embedding === "[-1]").length,
         5,
       );
@@ -586,16 +597,16 @@ Deno.test(
         doc.pageContent.toLowerCase().includes("bagels")
       )!;
       const res = hits(await splitIndex.search({ query: "bagels" }));
-      assertEquals(res.length, 7);
-      assertEquals(res[0]!.text, bagelsDoc.pageContent);
-      assertAlmostEquals(res[0]!.score, 2 / 61, 6);
+      assert.deepStrictEqual(res.length, 7);
+      assert.deepStrictEqual(res[0]!.text, bagelsDoc.pageContent);
+      assertAlmostEquals(res[0]!.score, 2 / 61);
     } finally {
       await close();
     }
   },
 );
 
-Deno.test(
+test(
   "reindex refresh clears stale chunk rows when the split changes",
   async () => {
     const longText =
@@ -615,7 +626,7 @@ Deno.test(
         textSplitter: coarse,
       });
       const coarseReport = await coarseIndex.reindex();
-      assertEquals(
+      assert.deepStrictEqual(
         coarseReport.chunkRowCount,
         (await coarse.createDocuments([longText])).length,
       );
@@ -631,13 +642,13 @@ Deno.test(
       });
       const fineReport = await fineIndex.reindex();
       const fineDocs = await fine.createDocuments([longText]);
-      assertEquals(fineReport.chunkRowCount, fineDocs.length);
+      assert.deepStrictEqual(fineReport.chunkRowCount, fineDocs.length);
 
       const rows = await sql.unsafe<{ text: string }>(
         "SELECT text FROM worlds_search_chunks ORDER BY id",
       );
-      assertEquals(rows.length, fineDocs.length);
-      assertEquals(
+      assert.deepStrictEqual(rows.length, fineDocs.length);
+      assert.deepStrictEqual(
         rows.map((row) => row.text),
         fineDocs.map((doc) => doc.pageContent),
       );
