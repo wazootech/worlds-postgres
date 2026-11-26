@@ -1,0 +1,28 @@
+{
+  "name": "@worlds/postgres",
+  "private": true,
+  "type": "module",
+  "description": "Bun toolchain manifest for @worlds/postgres. The published package is described by deno.json today (jsr.json after the cutover); the dependency ranges here mirror its import map.",
+  "packageManager": "bun@1.4.5",
+  "scripts": {
+    "test": "bun test --timeout 120000"
+  },
+  "dependencies": {
+    "@ai-sdk/google": "^4.0.50",
+    "@electric-sql/pglite": "^0.5.6",
+    "@electric-sql/pglite-pgvector": "^0.0.5",
+    "@langchain/core": "^1.2.9",
+    "@langchain/textsplitters": "^1.0.1",
+    "@rdfjs/types": "^2.0.1",
+    "@types/n3": "1.26.1",
+    "@wazoo/sparql-engine": "npm:@jsr/wazoo__sparql-engine@^0.5.0",
+    "@worlds/sdk": "npm:@jsr/worlds__sdk@^0.11.0",
+    "@worlds/sqlite": "npm:@jsr/worlds__sqlite@^0.8.1",
+    "ai": "^7.0.77",
+    "n3": "^2.2.11",
+    "pgvector": "^0.3.0",
+    "postgres": "^3.4.9",
+    "rdf-canonize": "^5.0.0",
+    "zod": "^4.4.3"
+  }
+}

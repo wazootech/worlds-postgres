@@ -1,30 +1,31 @@
 {
   "version": "5",
   "specifiers": {
-    "jsr:@std/assert@^1.0.19": "1.0.19",
     "jsr:@std/async@^1.5.0": "1.5.0",
     "jsr:@std/data-structures@^1.1.1": "1.1.2",
     "jsr:@std/encoding@^1.0.10": "1.0.11",
     "jsr:@std/encoding@^1.0.11": "1.0.11",
     "jsr:@std/fs@^1.0.24": "1.0.24",
-    "jsr:@std/internal@^1.0.12": "1.0.14",
     "jsr:@std/internal@^1.0.14": "1.0.14",
     "jsr:@std/path@^1.1.5": "1.1.6",
     "jsr:@std/path@^1.1.6": "1.1.6",
-    "jsr:@wazoo/sparql-engine@0.5": "0.5.0",
+    "jsr:@wazoo/sparql-engine@0.5": "0.5.1",
     "jsr:@worlds/client@0.1": "0.1.0",
     "jsr:@worlds/sdk@0.11": "0.11.0",
-    "jsr:@worlds/sqlite@~0.8.1": "0.8.1",
+    "jsr:@worlds/sqlite@~0.8.1": "0.8.2",
     "npm:@ai-sdk/google@^4.0.50": "4.0.50_zod@4.4.3",
     "npm:@electric-sql/pglite-pgvector@^0.0.5": "0.0.5_@electric-sql+pglite@0.5.6",
     "npm:@electric-sql/pglite@~0.5.6": "0.5.6",
+    "npm:@jsr/wazoo__sparql-engine@0.5": "0.5.1",
+    "npm:@jsr/worlds__sdk@0.11": "0.11.0_@tensorflow+tfjs-core@4.22.0_seedrandom@3.0.5_zod@4.4.3",
+    "npm:@jsr/worlds__sqlite@~0.8.1": "0.8.2_@langchain+core@1.2.9_@tensorflow+tfjs-core@4.22.0_seedrandom@3.0.5_zod@4.4.3",
     "npm:@langchain/core@^1.2.9": "1.2.9",
     "npm:@langchain/textsplitters@^1.0.1": "1.0.1_@langchain+core@1.2.9",
     "npm:@rdfjs/types@^2.0.1": "2.0.1",
     "npm:@tensorflow/tfjs-backend-wasm@^4.22.0": "4.22.0_@tensorflow+tfjs-core@4.22.0",
     "npm:@tensorflow/tfjs@^4.22.0": "4.22.0_seedrandom@3.0.5",
     "npm:@types/n3@1.26.1": "1.26.1",
-    "npm:ai@^6.0.195": "6.0.333_zod@4.4.3",
+    "npm:ai@^6.0.195": "6.0.336_zod@4.4.3",
     "npm:ai@^7.0.77": "7.0.77_zod@4.4.3",
     "npm:n3@^2.0.3": "2.13.12",
     "npm:n3@^2.2.11": "2.13.12",
@@ -34,12 +35,6 @@
     "npm:zod@^4.4.3": "4.4.3"
   },
   "jsr": {
-    "@std/assert@1.0.19": {
-      "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
-      "dependencies": [
-        "jsr:@std/internal@^1.0.12"
-      ]
-    },
     "@std/async@1.5.0": {
       "integrity": "4c1f22d287a17ad7d8643b1952bc5a4d21e5d8b68dc8c20d8268eecc69096e82",
       "dependencies": [
@@ -55,7 +50,7 @@
     "@std/fs@1.0.24": {
       "integrity": "f3061b45b81673a2bece689da041df32d174be064c89eb6397fb5718d3fb7877",
       "dependencies": [
-        "jsr:@std/internal@^1.0.14",
+        "jsr:@std/internal",
         "jsr:@std/path@^1.1.5"
       ]
     },
@@ -65,11 +60,11 @@
     "@std/path@1.1.6": {
       "integrity": "c68485c2a4dfbb5ae3cc74fae4e8c4e5d874cf8a8ed12927917235c758b46cbe",
       "dependencies": [
-        "jsr:@std/internal@^1.0.14"
+        "jsr:@std/internal"
       ]
     },
-    "@wazoo/sparql-engine@0.5.0": {
-      "integrity": "2ffa7d4a542e0a3ddb4b75fb6fcf88d295d81b9ba99eedfd0904dbd2497b0afc",
+    "@wazoo/sparql-engine@0.5.1": {
+      "integrity": "f4c3b63d3b45512ad1b40553fa240accd90f8ea106073207a1cee856768f5825",
       "dependencies": [
         "npm:@rdfjs/types"
       ]
@@ -92,8 +87,8 @@
         "npm:n3@^2.0.3"
       ]
     },
-    "@worlds/sqlite@0.8.1": {
-      "integrity": "08cb8afc0124147eb0edf5729f9ef5c9881a8a0189f03a499d6310fd766ba8a6",
+    "@worlds/sqlite@0.8.2": {
+      "integrity": "e2d5ab198d3c7d548701f3c2facf71406b64cc1f198b5746d60e6b330435cd13",
       "dependencies": [
         "jsr:@wazoo/sparql-engine",
         "jsr:@worlds/sdk",
@@ -102,8 +97,8 @@
     }
   },
   "npm": {
-    "@ai-sdk/gateway@3.0.238_zod@4.4.3": {
-      "integrity": "sha512-Kqdof17ZXdaKaHsoY/Z4HSbji86DVbIaG0kSgQwrKlEQIfp9Aip2S6xbba063EtLKWx0m/psvzCBYP73YUyWKA==",
+    "@ai-sdk/gateway@3.0.241_zod@4.4.3": {
+      "integrity": "sha512-a+YmzuIQvI78Y+x/fPulZcjSaLgPsZfaa/Phf23uWKXvrn4rrQ92Gkgq3vwvsLEVQHq0IdLyZblMzACbsauyEg==",
       "dependencies": [
         "@ai-sdk/provider@3.0.19",
         "@ai-sdk/provider-utils@4.0.67_zod@4.4.3",
@@ -172,6 +167,59 @@
     },
     "@electric-sql/pglite@0.5.6": {
       "integrity": "sha512-ipn6AOHouIRwNSVL+0hIRuM3yDwAWgRmvZuj+45sudzKpmdPbG8hQuQDZ4A8l7U8E0l7u6pJ/VtMEW42w+vEKQ=="
+    },
+    "@jsr/std__encoding@1.0.11": {
+      "integrity": "sha512-4SmW8WXf4x4FjkxVpxbir06QYwxw/h/2+RU5A66iKXbJC9WAYCICZkH01mcOGj8FgSitF/lSTlT585RZfo8Ukg==",
+      "tarball": "https://npm.jsr.io/~/11/@jsr/std__encoding/1.0.11.tgz"
+    },
+    "@jsr/std__internal@1.0.14": {
+      "integrity": "sha512-JT8b/t40WcR9q0GDwRZUooY7aXeXnFal8iidE/5TckdAFtvpVAsaJ71/Xgf1SfoChs41s6CZkuCYM8toaNgdvA==",
+      "tarball": "https://npm.jsr.io/~/11/@jsr/std__internal/1.0.14.tgz"
+    },
+    "@jsr/std__path@1.1.6": {
+      "integrity": "sha512-H1Cmg6z8jFyIsQbVV+vZB4eOx4k6Qg8lyUM6l7nZysj5MZumg89kb0M1bsPBTGQis3fw6mJFkJELo5+AK6oCFA==",
+      "dependencies": [
+        "@jsr/std__internal"
+      ],
+      "tarball": "https://npm.jsr.io/~/11/@jsr/std__path/1.1.6.tgz"
+    },
+    "@jsr/wazoo__sparql-engine@0.5.1": {
+      "integrity": "sha512-moFAPS6D61w6gVNLCf+eG5kPhlBrWKzQ6OQMgcWZAqm8GxDH6Z9XMucDhUnX1ugszhaeKkokeJUJmv4tzmKj6Q==",
+      "dependencies": [
+        "@rdfjs/types"
+      ],
+      "tarball": "https://npm.jsr.io/~/11/@jsr/wazoo__sparql-engine/0.5.1.tgz"
+    },
+    "@jsr/worlds__client@0.1.0": {
+      "integrity": "sha512-Z5iL51C6EXn4Iu1S+zTM+CGRdYRwFUZrEHOVOP2mQslCID0qNaWO7GuNNvGRZMpokjPXSBnL7pHmz72R8Yw3bA==",
+      "tarball": "https://npm.jsr.io/~/11/@jsr/worlds__client/0.1.0.tgz"
+    },
+    "@jsr/worlds__sdk@0.11.0_@tensorflow+tfjs-core@4.22.0_seedrandom@3.0.5_zod@4.4.3": {
+      "integrity": "sha512-QRtlzcZhfB6GiQ2s0+ohf6dm4pOrEzVaU39b5jjKCLU3svxOuBSB61kPvSJhCPBmoZE8nkuqn+ihjSXIRGhtxw==",
+      "dependencies": [
+        "@jsr/std__encoding",
+        "@jsr/std__path",
+        "@jsr/wazoo__sparql-engine",
+        "@jsr/worlds__client",
+        "@rdfjs/types",
+        "@tensorflow/tfjs",
+        "@tensorflow/tfjs-backend-wasm",
+        "@types/n3",
+        "ai@6.0.336_zod@4.4.3",
+        "n3"
+      ],
+      "tarball": "https://npm.jsr.io/~/11/@jsr/worlds__sdk/0.11.0.tgz"
+    },
+    "@jsr/worlds__sqlite@0.8.2_@langchain+core@1.2.9_@tensorflow+tfjs-core@4.22.0_seedrandom@3.0.5_zod@4.4.3": {
+      "integrity": "sha512-u4hPixxKrmzU6Au+iUEBl1nqHHLohqaHPK+8yI0xyxnGvc3VCJcZGNhavsCeNtut+wdiz/fPFp/c+WAzTlGL2Q==",
+      "dependencies": [
+        "@jsr/wazoo__sparql-engine",
+        "@jsr/worlds__sdk",
+        "@langchain/textsplitters",
+        "@rdfjs/types",
+        "sqlite-vec"
+      ],
+      "tarball": "https://npm.jsr.io/~/11/@jsr/worlds__sqlite/0.8.2.tgz"
     },
     "@langchain/core@1.2.9": {
       "integrity": "sha512-conzSEj9Zu1AyXJLXsSbgrtxtxinmI1yGqQ5CIJZSoV5rvv+yvQE/vgBnoySpBQ/bl3YPgj2FL/gbDjWykLSfg==",
@@ -301,8 +349,8 @@
         "form-data"
       ]
     },
-    "@types/node@26.6.6": {
-      "integrity": "sha512-MzQj+8Kx3XI40OmUAE6Qoh58ZMNstNNMwn2nfd3qWsfe7nDNSqJNzes4njhz6AHwrSHOffSLwXU6yb474Q4aog==",
+    "@types/node@26.6.7": {
+      "integrity": "sha512-tovuRfrUILu6v46bMG+BgXxMvsqPBx2WO2as8Rpln+JTff1dbexMtAM4KFTejmL0axsnSWViCW7MecUQpLuBRA==",
       "dependencies": [
         "undici-types"
       ]
@@ -331,10 +379,10 @@
         "event-target-shim"
       ]
     },
-    "ai@6.0.333_zod@4.4.3": {
-      "integrity": "sha512-mY+EpkQtTRHHJZ6CaKKJETsYmAEITKKPKmVY+FhJGUjDaLLl7CaF2Qgv8ShGN4eZgSSHbi34yfWx71QvQgKyOQ==",
+    "ai@6.0.336_zod@4.4.3": {
+      "integrity": "sha512-QI/goioS6Y+chX/lyuiNb8zX0je9QVlV0rKH8KOeQ4Uv22AXeOM1awfHLp3LeMUWUWPiNcfPxnNox1su7W4sjQ==",
       "dependencies": [
-        "@ai-sdk/gateway@3.0.238_zod@4.4.3",
+        "@ai-sdk/gateway@3.0.241_zod@4.4.3",
         "@ai-sdk/provider@3.0.19",
         "@ai-sdk/provider-utils@4.0.67_zod@4.4.3",
         "@opentelemetry/api",
@@ -640,6 +688,41 @@
     "sprintf-js@1.0.3": {
       "integrity": "sha512-D9cPgkvLlV3t3IzL0D0YLvGA9Ahk4PcvVwUbN0dSGr1aP0Nrt4AEnTUbuGvquEC0mA64Gqt1fzirlRs5ibXx8g=="
     },
+    "sqlite-vec-darwin-arm64@0.1.9": {
+      "integrity": "sha512-jSsZpE42OfBkGL/ItyJTVCUwl6o6Ka3U5rc4j+UBDIQzC1ulSSKMEhQLthsOnF/MdAf1MuAkYhkdKmmcjaIZQg==",
+      "os": ["darwin"],
+      "cpu": ["arm64"]
+    },
+    "sqlite-vec-darwin-x64@0.1.9": {
+      "integrity": "sha512-KDlVyqQT7pnOhU1ymB9gs7dMbSoVmKHitT+k1/xkjarcX8bBqPxWrGlK/R+C5WmWkfvWwyq5FfXfiBYCBs6PlA==",
+      "os": ["darwin"],
+      "cpu": ["x64"]
+    },
+    "sqlite-vec-linux-arm64@0.1.9": {
+      "integrity": "sha512-5wXVJ9c9kR4CHm/wVqXb/R+XUHTdpZ4nWbPHlS+gc9qQFVHs92Km4bPnCKX4rtcPMzvNis+SIzMJR1SCEwpuUw==",
+      "os": ["linux"],
+      "cpu": ["arm64"]
+    },
+    "sqlite-vec-linux-x64@0.1.9": {
+      "integrity": "sha512-w3tCH8xK2finW8fQJ/m8uqKodXUZ9KAuAar2UIhz4BHILfpE0WM/MTGCRfa7RjYbrYim5Luk3guvMOGI7T7JQA==",
+      "os": ["linux"],
+      "cpu": ["x64"]
+    },
+    "sqlite-vec-windows-x64@0.1.9": {
+      "integrity": "sha512-y3gEIyy/17bq2QFPQOWLE68TYWcRZkBQVA2XLrTPHNTOp55xJi/BBBmOm40tVMDMjtP+Elpk6UBUXdaq+46b0Q==",
+      "os": ["win32"],
+      "cpu": ["x64"]
+    },
+    "sqlite-vec@0.1.9": {
+      "integrity": "sha512-L7XJWRIBNvR9O5+vh1FQ+IGkh/3D2AzVksW5gdtk28m78Hy8skFD0pqReKH1Yp0/BUKRGcffgKvyO/EON5JXpA==",
+      "optionalDependencies": [
+        "sqlite-vec-darwin-arm64",
+        "sqlite-vec-darwin-x64",
+        "sqlite-vec-linux-arm64",
+        "sqlite-vec-linux-x64",
+        "sqlite-vec-windows-x64"
+      ]
+    },
     "string-width@4.2.3": {
       "integrity": "sha512-wKyQRQpjJ0sIp62ErSZdGsjMJWsap5oRNihHhu6G7JVO/9jIB6UyevL+tXuOqrng8j/cxKTWyWUwvSTriiZz/g==",
       "dependencies": [
@@ -720,7 +803,6 @@
   },
   "workspace": {
     "dependencies": [
-      "jsr:@std/assert@^1.0.19",
       "jsr:@std/async@^1.5.0",
       "jsr:@std/encoding@^1.0.11",
       "jsr:@std/fs@^1.0.24",
@@ -741,6 +823,26 @@
       "npm:postgres@^3.4.9",
       "npm:rdf-canonize@5",
       "npm:zod@^4.4.3"
-    ]
+    ],
+    "packageJson": {
+      "dependencies": [
+        "npm:@ai-sdk/google@^4.0.50",
+        "npm:@electric-sql/pglite-pgvector@^0.0.5",
+        "npm:@electric-sql/pglite@~0.5.6",
+        "npm:@jsr/wazoo__sparql-engine@0.5",
+        "npm:@jsr/worlds__sdk@0.11",
+        "npm:@jsr/worlds__sqlite@~0.8.1",
+        "npm:@langchain/core@^1.2.9",
+        "npm:@langchain/textsplitters@^1.0.1",
+        "npm:@rdfjs/types@^2.0.1",
+        "npm:@types/n3@1.26.1",
+        "npm:ai@^7.0.77",
+        "npm:n3@^2.2.11",
+        "npm:pgvector@0.3",
+        "npm:postgres@^3.4.9",
+        "npm:rdf-canonize@5",
+        "npm:zod@^4.4.3"
+      ]
+    }
   }
 }
