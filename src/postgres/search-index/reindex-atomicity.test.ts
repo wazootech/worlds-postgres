@@ -36,7 +36,7 @@ class ScriptedEmbeddings implements EmbeddingService {
       return Promise.reject(new Error("embedding service unavailable"));
     }
     return Promise.resolve(texts.map(() => {
-      const vector = new Array<number>(CONFORMANCE_VECTOR_DIMENSIONS).fill(0);
+      const vector = Array.from({ length: CONFORMANCE_VECTOR_DIMENSIONS }, () => 0);
       vector[0] = this.version;
       return vector;
     }));

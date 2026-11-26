@@ -54,7 +54,7 @@ class LookupEmbeddingService implements EmbeddingService {
 
   public embed(texts: string[]): Promise<Array<number[]>> {
     return Promise.resolve(
-      texts.map((text) => this.lookup.get(text) ?? new Array(3).fill(0)),
+      texts.map((text) => this.lookup.get(text) ?? Array.from({ length: 3 }, () => 0)),
     );
   }
 }
@@ -69,7 +69,7 @@ class KeywordEmbeddingService implements EmbeddingService {
   public embed(texts: string[]): Promise<Array<number[]>> {
     return Promise.resolve(
       texts.map((text) => {
-        const vector = new Array(this.keywords.length).fill(0) as number[];
+        const vector = Array.from({ length: this.keywords.length }, () => 0);
         this.keywords.forEach((keyword, index) => {
           if (text.toLowerCase().includes(keyword)) vector[index] = 1;
         });
