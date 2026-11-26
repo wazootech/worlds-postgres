@@ -1,4 +1,6 @@
-.DS_Store
 node_modules/
 vendor/
 *.log
+.DS_Store
+# jsr publish regenerates a Deno lockfile on every run; it is never committed.
+deno.lock
