@@ -3,7 +3,9 @@
  * Postgres (see commit-conformance.test.ts): a failed commit rolls the whole
  * transaction back, and a failed replace import keeps the old graph.
  */
-import { assert, assertEquals, assertRejects } from "@std/assert";
+import test from "node:test";
+import assert from "node:assert/strict";
+import { rejected } from "@/postgres/testing/assertions.ts";
 import { DataFactory } from "@wazoo/sparql-engine";
 import { FakeEmbeddingService } from "@worlds/sdk/search-index/embedding-service";
 import { createPostgresCommitHarness } from "./postgres-commit-subject.ts";
@@ -18,7 +20,7 @@ const keys = async (
   harness: Awaited<ReturnType<typeof createPostgresCommitHarness>>,
 ) => (await harness.subject.storedQuads()).map((q) => q.subject.value).sort();
 
-Deno.test("a failed commit rolls back every write in the patch", async () => {
+test("a failed commit rolls back every write in the patch", async () => {
   const harness = await createPostgresCommitHarness(new FakeEmbeddingService());
   try {
     await harness.subject.commit({
@@ -26,7 +28,7 @@ Deno.test("a failed commit rolls back every write in the patch", async () => {
       deletions: [],
     });
     harness.subject.failNextWrite();
-    await assertRejects(
+    await rejected(
       () =>
         harness.subject.commit({
           insertions: [text("one"), text("two")],
@@ -36,16 +38,16 @@ Deno.test("a failed commit rolls back every write in the patch", async () => {
       "injected write failure",
     );
     // The deletion and both insertions were rolled back together.
-    assertEquals(await keys(harness), ["urn:t:base"]);
+    assert.deepStrictEqual(await keys(harness), ["urn:t:base"]);
     // The store is usable afterwards.
     await harness.subject.commit({ insertions: [text("one")], deletions: [] });
-    assertEquals(await keys(harness), ["urn:t:base", "urn:t:one"]);
+    assert.deepStrictEqual(await keys(harness), ["urn:t:base", "urn:t:one"]);
   } finally {
     await harness.close();
   }
 });
 
-Deno.test("a failed replace import keeps the old graph", async () => {
+test("a failed replace import keeps the old graph", async () => {
   const harness = await createPostgresCommitHarness(new FakeEmbeddingService());
   try {
     await harness.subject.commit(
@@ -53,7 +55,7 @@ Deno.test("a failed replace import keeps the old graph", async () => {
       { importMode: "merge" },
     );
     harness.subject.failNextWrite();
-    await assertRejects(
+    await rejected(
       () =>
         harness.subject.commit(
           { insertions: [text("one")], deletions: [] },
@@ -63,13 +65,13 @@ Deno.test("a failed replace import keeps the old graph", async () => {
       "injected write failure",
     );
     // The wipe ran in the same transaction as the insert, so it rolled back.
-    assertEquals(await keys(harness), ["urn:t:base", "urn:t:three"]);
+    assert.deepStrictEqual(await keys(harness), ["urn:t:base", "urn:t:three"]);
   } finally {
     await harness.close();
   }
 });
 
-Deno.test("failLaterWrite fails a chunk write after the quad inserts and rolls back", async () => {
+test("failLaterWrite fails a chunk write after the quad inserts and rolls back", async () => {
   const harness = await createPostgresCommitHarness(new FakeEmbeddingService());
   try {
     await harness.subject.commit({
@@ -77,7 +79,7 @@ Deno.test("failLaterWrite fails a chunk write after the quad inserts and rolls b
       deletions: [],
     });
     harness.subject.failLaterWrite?.();
-    await assertRejects(
+    await rejected(
       () =>
         harness.subject.commit({
           insertions: [text("one"), text("two")],
@@ -97,7 +99,7 @@ Deno.test("failLaterWrite fails a chunk write after the quad inserts and rolls b
     assert(ran[failed]!.startsWith("INSERT INTO worlds_search_chunks"));
     assert(quadInsert < failed, "the failure must follow the quad inserts");
     // The quad inserts rolled back with the transaction.
-    assertEquals(await keys(harness), ["urn:t:base"]);
+    assert.deepStrictEqual(await keys(harness), ["urn:t:base"]);
   } finally {
     await harness.close();
   }

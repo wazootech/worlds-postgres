@@ -1,6 +1,7 @@
 // PostgresRdfjsStore unit tests over PGlite (WASM PostgreSQL, in-memory).
 import type * as rdfjs from "@rdfjs/types";
-import { assertEquals } from "@std/assert";
+import test from "node:test";
+import assert from "node:assert/strict";
 import { DataFactory } from "@wazoo/sparql-engine";
 import { createPGliteSql } from "@/postgres/sql/pglite-adapter.ts";
 import { PostgresRdfjsStore } from "@/postgres/rdfjs-store/postgres-rdfjs-store.ts";
@@ -52,25 +53,25 @@ async function collect(
   return quads;
 }
 
-Deno.test("addQuad/removeQuad persist and size tracks the live count", async () => {
+test("addQuad/removeQuad persist and size tracks the live count", async () => {
   const { store, close } = await freshStore();
   try {
     store.addQuad(quadOf("alice", "knows", "bob"));
     store.addQuad(quadOf("alice", "name", "Alice", "urn:g1"));
     await store.flush();
-    assertEquals(store.size, 2);
-    assertEquals((await collect(store)).length, 2);
+    assert.deepStrictEqual(store.size, 2);
+    assert.deepStrictEqual((await collect(store)).length, 2);
 
     store.removeQuad(quadOf("alice", "knows", "bob"));
     await store.flush();
-    assertEquals(store.size, 1);
-    assertEquals((await collect(store)).length, 1);
+    assert.deepStrictEqual(store.size, 1);
+    assert.deepStrictEqual((await collect(store)).length, 1);
   } finally {
     await close();
   }
 });
 
-Deno.test("match filters on every bound position", async () => {
+test("match filters on every bound position", async () => {
   const { store, close } = await freshStore();
   try {
     store.addQuad(quadOf("alice", "knows", "bob"));
@@ -79,18 +80,21 @@ Deno.test("match filters on every bound position", async () => {
     store.addQuad(quadOf("alice", "name", "Alice", "urn:g1"));
     await store.flush();
 
-    assertEquals((await collect(store, ex("alice"))).length, 3);
-    assertEquals((await collect(store, null, ex("knows"))).length, 3);
-    assertEquals((await collect(store, null, null, ex("carol"))).length, 1);
-    assertEquals(
+    assert.deepStrictEqual((await collect(store, ex("alice"))).length, 3);
+    assert.deepStrictEqual((await collect(store, null, ex("knows"))).length, 3);
+    assert.deepStrictEqual(
+      (await collect(store, null, null, ex("carol"))).length,
+      1,
+    );
+    assert.deepStrictEqual(
       (await collect(store, ex("alice"), ex("knows"), ex("bob"))).length,
       1,
     );
-    assertEquals(
+    assert.deepStrictEqual(
       (await collect(store, null, null, null, ex("urn:g1"))).length,
       1,
     );
-    assertEquals(
+    assert.deepStrictEqual(
       (await collect(store, null, null, null, defaultGraph())).length,
       3,
     );
@@ -99,7 +103,7 @@ Deno.test("match filters on every bound position", async () => {
   }
 });
 
-Deno.test("match pages deterministically past the page size", async () => {
+test("match pages deterministically past the page size", async () => {
   const { sql, close } = await freshStore();
   try {
     // Force tiny pages to exercise keyset pagination.
@@ -116,15 +120,15 @@ Deno.test("match pages deterministically past the page size", async () => {
     }
     await writer.flush();
     const all = await collect(paged);
-    assertEquals(all.length, 25);
+    assert.deepStrictEqual(all.length, 25);
     const subjects = new Set(all.map((q) => q.subject.value));
-    assertEquals(subjects.size, 25);
+    assert.deepStrictEqual(subjects.size, 25);
   } finally {
     await close();
   }
 });
 
-Deno.test("literal language and datatype round-trip losslessly", async () => {
+test("literal language and datatype round-trip losslessly", async () => {
   const { store, close } = await freshStore();
   try {
     const quads = [
@@ -137,10 +141,13 @@ Deno.test("literal language and datatype round-trip losslessly", async () => {
     }
     await store.flush();
     const out = await collect(store, ex("s"));
-    assertEquals(out.length, 3);
+    assert.deepStrictEqual(out.length, 3);
     const byValue = new Map(out.map((q) => [q.object.value, q.object]));
-    assertEquals((byValue.get("hola") as rdfjs.Literal).language, "es");
-    assertEquals(
+    assert.deepStrictEqual(
+      (byValue.get("hola") as rdfjs.Literal).language,
+      "es",
+    );
+    assert.deepStrictEqual(
       (byValue.get("42") as rdfjs.Literal).datatype.value,
       XSD_INTEGER,
     );
@@ -149,7 +156,7 @@ Deno.test("literal language and datatype round-trip losslessly", async () => {
   }
 });
 
-Deno.test("RDF-star triple terms round-trip structurally", async () => {
+test("RDF-star triple terms round-trip structurally", async () => {
   const { store, close } = await freshStore();
   try {
     const inner = quad(ex("a"), ex("b"), ex("c"));
@@ -157,17 +164,17 @@ Deno.test("RDF-star triple terms round-trip structurally", async () => {
     store.addQuad(outer);
     await store.flush();
     const out = await collect(store, ex("s"));
-    assertEquals(out.length, 1);
-    assertEquals(out[0]!.object.termType, "Quad");
+    assert.deepStrictEqual(out.length, 1);
+    assert.deepStrictEqual(out[0]!.object.termType, "Quad");
     const decoded = out[0]!.object as ReturnType<typeof quad>;
-    assertEquals(decoded.subject.value, "http://example.org/a");
-    assertEquals(decoded.object.value, "http://example.org/c");
+    assert.deepStrictEqual(decoded.subject.value, "http://example.org/a");
+    assert.deepStrictEqual(decoded.object.value, "http://example.org/c");
   } finally {
     await close();
   }
 });
 
-Deno.test("transaction commit is atomic and rollback discards", async () => {
+test("transaction commit is atomic and rollback discards", async () => {
   const { store, close } = await freshStore();
   try {
     store.addQuad(quadOf("alice", "knows", "bob"));
@@ -177,19 +184,22 @@ Deno.test("transaction commit is atomic and rollback discards", async () => {
     tx.add(quadOf("alice", "knows", "carol"));
     tx.delete(quadOf("alice", "knows", "bob"));
     await tx.commit();
-    assertEquals((await collect(store)).length, 1);
-    assertEquals((await collect(store, null, null, ex("carol"))).length, 1);
+    assert.deepStrictEqual((await collect(store)).length, 1);
+    assert.deepStrictEqual(
+      (await collect(store, null, null, ex("carol"))).length,
+      1,
+    );
 
     const tx2 = store.createTransaction();
     tx2.add(quadOf("alice", "knows", "dave"));
     tx2.rollback();
-    assertEquals((await collect(store)).length, 1);
+    assert.deepStrictEqual((await collect(store)).length, 1);
   } finally {
     await close();
   }
 });
 
-Deno.test("applyPatch replace mode clears the store first", async () => {
+test("applyPatch replace mode clears the store first", async () => {
   const { store, close } = await freshStore();
   try {
     await store.applyPatch({
@@ -204,14 +214,14 @@ Deno.test("applyPatch replace mode clears the store first", async () => {
       { importMode: "replace" },
     );
     const out = await collect(store);
-    assertEquals(out.length, 1);
-    assertEquals(out[0]!.subject.value, "http://example.org/carol");
+    assert.deepStrictEqual(out.length, 1);
+    assert.deepStrictEqual(out[0]!.subject.value, "http://example.org/carol");
   } finally {
     await close();
   }
 });
 
-Deno.test("removeMatches deletes matches and streams the removed quads", async () => {
+test("removeMatches deletes matches and streams the removed quads", async () => {
   const { store, close } = await freshStore();
   try {
     store.addQuad(quadOf("alice", "knows", "bob"));
@@ -226,15 +236,15 @@ Deno.test("removeMatches deletes matches and streams the removed quads", async (
       stream.on("end", resolve);
       stream.on("error", reject);
     });
-    assertEquals(removed.length, 2);
+    assert.deepStrictEqual(removed.length, 2);
     await store.flush();
-    assertEquals((await collect(store)).length, 1);
+    assert.deepStrictEqual((await collect(store)).length, 1);
   } finally {
     await close();
   }
 });
 
-Deno.test("deleteGraph removes a named graph only", async () => {
+test("deleteGraph removes a named graph only", async () => {
   const { store, close } = await freshStore();
   try {
     store.addQuad(quadOf("alice", "knows", "bob"));
@@ -246,21 +256,24 @@ Deno.test("deleteGraph removes a named graph only", async () => {
       stream.on("error", reject);
     });
     await store.flush();
-    assertEquals((await collect(store)).length, 1);
+    assert.deepStrictEqual((await collect(store)).length, 1);
   } finally {
     await close();
   }
 });
 
-Deno.test("blank nodes and quads differing only by graph never collide", async () => {
+test("blank nodes and quads differing only by graph never collide", async () => {
   const { store, close } = await freshStore();
   try {
     store.addQuad(quadOf("alice", "knows", "bob"));
     store.addQuad(quad(ex("alice"), ex("knows"), ex("bob"), ex("g1")));
     store.addQuad(quad(blankNode("b1"), ex("p"), ex("o")));
     await store.flush();
-    assertEquals(store.size, 3);
-    assertEquals((await collect(store, null, null, null, ex("g1"))).length, 1);
+    assert.deepStrictEqual(store.size, 3);
+    assert.deepStrictEqual(
+      (await collect(store, null, null, null, ex("g1"))).length,
+      1,
+    );
   } finally {
     await close();
   }

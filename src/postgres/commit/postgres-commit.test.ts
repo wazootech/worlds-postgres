@@ -4,7 +4,9 @@
  * Postgres-specific: the factory wiring, deletion and rebuild behavior against
  * the Postgres schema, and large commits staying one transaction.
  */
-import { assertEquals, assertRejects } from "@std/assert";
+import test from "node:test";
+import assert from "node:assert/strict";
+import { rejected } from "@/postgres/testing/assertions.ts";
 import { DataFactory } from "@wazoo/sparql-engine";
 import { FakeEmbeddingService } from "@worlds/sdk/search-index/embedding-service";
 import { createPostgresWorldsSdk } from "@/postgres/sdk/mod.ts";
@@ -30,7 +32,7 @@ const chunkSubjects = async (harness: PostgresCommitHarness) =>
     "SELECT subject FROM worlds_search_chunks",
   )).map((row) => row.subject).sort();
 
-Deno.test("the SDK factory projects chunks at commit, so import is searchable without reindex", async () => {
+test("the SDK factory projects chunks at commit, so import is searchable without reindex", async () => {
   const sql = await createPGliteSql();
   try {
     const sdk = await createPostgresWorldsSdk({
@@ -46,13 +48,13 @@ Deno.test("the SDK factory projects chunks at commit, so import is searchable wi
       },
     });
     const { results } = await sdk.search({ query: "pelican" });
-    assertEquals(results?.map((hit) => hit.subject), ["urn:t:a"]);
+    assert.deepStrictEqual(results?.map((hit) => hit.subject), ["urn:t:a"]);
   } finally {
     await sql.end();
   }
 });
 
-Deno.test("an embedding failure at commit rejects the import and writes nothing", async () => {
+test("an embedding failure at commit rejects the import and writes nothing", async () => {
   const sql = await createPGliteSql();
   try {
     const sdk = await createPostgresWorldsSdk({
@@ -62,68 +64,74 @@ Deno.test("an embedding failure at commit rejects the import and writes nothing"
       },
       vectorDimensions: CONFORMANCE_VECTOR_DIMENSIONS,
     });
-    await assertRejects(
+    await rejected(
       () =>
         sdk.import({
           source: { kind: "quads", quads: [textQuad("a")] },
         }),
       Error,
     );
-    assertEquals(await sql.unsafe("SELECT 1 FROM worlds_quads"), []);
+    assert.deepStrictEqual(await sql.unsafe("SELECT 1 FROM worlds_quads"), []);
   } finally {
     await sql.end();
   }
 });
 
-Deno.test("deleting a quad removes its chunk rows; re-adding writes them back", async () => {
+test("deleting a quad removes its chunk rows; re-adding writes them back", async () => {
   const harness = await createPostgresCommitHarness(new FakeEmbeddingService());
   try {
     const { commit } = harness.subject;
     await commit({ insertions: [textQuad("a"), textQuad("b")], deletions: [] });
     await commit({ insertions: [], deletions: [textQuad("a")] });
-    assertEquals(await chunkSubjects(harness), ["urn:t:b"]);
+    assert.deepStrictEqual(await chunkSubjects(harness), ["urn:t:b"]);
     await commit({ insertions: [textQuad("a")], deletions: [] });
-    assertEquals(await chunkSubjects(harness), ["urn:t:a", "urn:t:b"]);
+    assert.deepStrictEqual(await chunkSubjects(harness), [
+      "urn:t:a",
+      "urn:t:b",
+    ]);
   } finally {
     await harness.close();
   }
 });
 
-Deno.test("a commit larger than the shared write batch size is still one transaction", async () => {
+test("a commit larger than the shared write batch size is still one transaction", async () => {
   const harness = await createPostgresCommitHarness(new FakeEmbeddingService());
   try {
     const many = Array.from({ length: 1200 }, (_, i) => textQuad(`q${i}`));
     harness.subject.failNextWrite();
-    await assertRejects(
+    await rejected(
       () => harness.subject.commit({ insertions: many, deletions: [] }),
       Error,
       "injected write failure",
     );
-    assertEquals((await harness.subject.storedQuads()).length, 0);
-    assertEquals((await harness.subject.chunkedQuadIds()).length, 0);
+    assert.deepStrictEqual((await harness.subject.storedQuads()).length, 0);
+    assert.deepStrictEqual((await harness.subject.chunkedQuadIds()).length, 0);
     await harness.subject.commit({ insertions: many, deletions: [] });
-    assertEquals((await harness.subject.storedQuads()).length, 1200);
-    assertEquals((await harness.subject.chunkedQuadIds()).length, 1200);
+    assert.deepStrictEqual((await harness.subject.storedQuads()).length, 1200);
+    assert.deepStrictEqual(
+      (await harness.subject.chunkedQuadIds()).length,
+      1200,
+    );
   } finally {
     await harness.close();
   }
 });
 
-Deno.test("a patch that repeats a quad stores it once with one set of chunks", async () => {
+test("a patch that repeats a quad stores it once with one set of chunks", async () => {
   const harness = await createPostgresCommitHarness(new FakeEmbeddingService());
   try {
     await harness.subject.commit({
       insertions: [textQuad("a"), textQuad("a")],
       deletions: [],
     });
-    assertEquals((await harness.subject.storedQuads()).length, 1);
-    assertEquals(await chunkSubjects(harness), ["urn:t:a"]);
+    assert.deepStrictEqual((await harness.subject.storedQuads()).length, 1);
+    assert.deepStrictEqual(await chunkSubjects(harness), ["urn:t:a"]);
   } finally {
     await harness.close();
   }
 });
 
-Deno.test("a full reindex drops orphan chunk rows; a scoped one touches only its scope", async () => {
+test("a full reindex drops orphan chunk rows; a scoped one touches only its scope", async () => {
   const harness = await createPostgresCommitHarness(new FakeEmbeddingService());
   try {
     await harness.subject.commit({
@@ -140,15 +148,18 @@ Deno.test("a full reindex drops orphan chunk rows; a scoped one touches only its
     await orphan("orphan2", "urn:t:g2");
     // Scoped to g1: only g1's rows are replaced, so orphan2 survives.
     await harness.index.reindex({ include: { graphs: ["urn:t:g1"] } });
-    assertEquals(await chunkSubjects(harness), [
+    assert.deepStrictEqual(await chunkSubjects(harness), [
       "urn:t:a",
       "urn:t:b",
       "urn:t:orphan1",
       "urn:t:orphan2",
     ]);
     const report = await harness.index.reindex();
-    assertEquals(report.processedQuadCount, 2);
-    assertEquals(await chunkSubjects(harness), ["urn:t:a", "urn:t:b"]);
+    assert.deepStrictEqual(report.processedQuadCount, 2);
+    assert.deepStrictEqual(await chunkSubjects(harness), [
+      "urn:t:a",
+      "urn:t:b",
+    ]);
   } finally {
     await harness.close();
   }

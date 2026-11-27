@@ -8,7 +8,8 @@
  * chunk row here comes from reindex(); vectors carry a version so a refreshed
  * row is told apart from a kept one.
  */
-import { assertEquals } from "@std/assert";
+import test from "node:test";
+import assert from "node:assert/strict";
 import { DataFactory } from "@wazoo/sparql-engine";
 import type { EmbeddingService } from "@worlds/sdk/search-index/embedding-service";
 import {
@@ -68,7 +69,7 @@ async function indexed() {
 const all = (version: number) =>
   Object.fromEntries(NAMES.map((n) => [`urn:t:${n}`, version]));
 
-Deno.test("a scoped include reindex refreshes in-scope rows, keeps the rest, and scans every quad", async () => {
+test("a scoped include reindex refreshes in-scope rows, keeps the rest, and scans every quad", async () => {
   const { embeddings, harness } = await indexed();
   try {
     embeddings.version = 2;
@@ -76,8 +77,8 @@ Deno.test("a scoped include reindex refreshes in-scope rows, keeps the rest, and
       include: { subjects: ["urn:t:a2", "urn:t:a4"] },
       readPageSize: 2,
     });
-    assertEquals(report, { processedQuadCount: 5, chunkRowCount: 2 });
-    assertEquals(await versions(harness), {
+    assert.deepStrictEqual(report, { processedQuadCount: 5, chunkRowCount: 2 });
+    assert.deepStrictEqual(await versions(harness), {
       ...all(1),
       "urn:t:a2": 2,
       "urn:t:a4": 2,
@@ -87,35 +88,38 @@ Deno.test("a scoped include reindex refreshes in-scope rows, keeps the rest, and
   }
 });
 
-Deno.test("a scoped exclude reindex refreshes the rest, keeps the excluded, and scans every quad", async () => {
+test("a scoped exclude reindex refreshes the rest, keeps the excluded, and scans every quad", async () => {
   const { embeddings, harness } = await indexed();
   try {
     embeddings.version = 2;
     const report = await harness.index.reindex({
       exclude: { graphs: ["urn:t:g"] }, // leaves only the default-graph a1
     });
-    assertEquals(report, { processedQuadCount: 5, chunkRowCount: 1 });
-    assertEquals(await versions(harness), { ...all(1), "urn:t:a1": 2 });
+    assert.deepStrictEqual(report, { processedQuadCount: 5, chunkRowCount: 1 });
+    assert.deepStrictEqual(await versions(harness), {
+      ...all(1),
+      "urn:t:a1": 2,
+    });
   } finally {
     await harness.close();
   }
 });
 
-Deno.test("a scope that matches nothing writes no rows and still scans every quad", async () => {
+test("a scope that matches nothing writes no rows and still scans every quad", async () => {
   const { embeddings, harness } = await indexed();
   try {
     embeddings.version = 2;
     const report = await harness.index.reindex({
       include: { subjects: ["urn:t:nobody"] },
     });
-    assertEquals(report, { processedQuadCount: 5, chunkRowCount: 0 });
-    assertEquals(await versions(harness), all(1));
+    assert.deepStrictEqual(report, { processedQuadCount: 5, chunkRowCount: 0 });
+    assert.deepStrictEqual(await versions(harness), all(1));
   } finally {
     await harness.close();
   }
 });
 
-Deno.test("empty criteria are unscoped: every row is refreshed and a stale row is dropped", async () => {
+test("empty criteria are unscoped: every row is refreshed and a stale row is dropped", async () => {
   const { embeddings, harness } = await indexed();
   try {
     await harness.sql.unsafe("DELETE FROM worlds_quads WHERE skey LIKE $1", [
@@ -126,30 +130,30 @@ Deno.test("empty criteria are unscoped: every row is refreshed and a stale row i
       include: { subjects: [], graphs: undefined },
       exclude: {},
     });
-    assertEquals(report, { processedQuadCount: 4, chunkRowCount: 4 });
+    assert.deepStrictEqual(report, { processedQuadCount: 4, chunkRowCount: 4 });
     const { "urn:t:a5": _gone, ...rest } = all(2);
-    assertEquals(await versions(harness), rest);
+    assert.deepStrictEqual(await versions(harness), rest);
   } finally {
     await harness.close();
   }
 });
 
-Deno.test("an unscoped reindex removes the chunk row of a deleted quad", async () => {
+test("an unscoped reindex removes the chunk row of a deleted quad", async () => {
   const { harness } = await indexed();
   try {
     await harness.sql.unsafe("DELETE FROM worlds_quads WHERE skey LIKE $1", [
       "%a3%",
     ]);
     const report = await harness.index.reindex({ readPageSize: 2 });
-    assertEquals(report, { processedQuadCount: 4, chunkRowCount: 4 });
+    assert.deepStrictEqual(report, { processedQuadCount: 4, chunkRowCount: 4 });
     const { "urn:t:a3": _gone, ...rest } = all(1);
-    assertEquals(await versions(harness), rest);
+    assert.deepStrictEqual(await versions(harness), rest);
   } finally {
     await harness.close();
   }
 });
 
-Deno.test("a scoped reindex keeps the stale row of a deleted quad", async () => {
+test("a scoped reindex keeps the stale row of a deleted quad", async () => {
   const { harness } = await indexed();
   try {
     await harness.sql.unsafe("DELETE FROM worlds_quads WHERE skey LIKE $1", [
@@ -158,28 +162,34 @@ Deno.test("a scoped reindex keeps the stale row of a deleted quad", async () => 
     const report = await harness.index.reindex({
       include: { subjects: ["urn:t:a1"] },
     });
-    assertEquals(report, { processedQuadCount: 4, chunkRowCount: 1 });
-    assertEquals(await versions(harness), all(1));
+    assert.deepStrictEqual(report, { processedQuadCount: 4, chunkRowCount: 1 });
+    assert.deepStrictEqual(await versions(harness), all(1));
   } finally {
     await harness.close();
   }
 });
 
-Deno.test("keyset paging covers every quad across pages for scoped and unscoped runs", async () => {
+test("keyset paging covers every quad across pages for scoped and unscoped runs", async () => {
   const { embeddings, harness } = await indexed();
   try {
     embeddings.version = 2;
     for (const pageSize of [1, 2, 3, 5, 6]) {
       const unscoped = await harness.index.reindex({ readPageSize: pageSize });
-      assertEquals(unscoped, { processedQuadCount: 5, chunkRowCount: 5 });
+      assert.deepStrictEqual(unscoped, {
+        processedQuadCount: 5,
+        chunkRowCount: 5,
+      });
       const scoped = await harness.index.reindex({
         include: { predicates: ["urn:t:p"] },
         exclude: { subjects: ["urn:t:a3"] },
         readPageSize: pageSize,
       });
-      assertEquals(scoped, { processedQuadCount: 5, chunkRowCount: 4 });
+      assert.deepStrictEqual(scoped, {
+        processedQuadCount: 5,
+        chunkRowCount: 4,
+      });
     }
-    assertEquals(await versions(harness), all(2));
+    assert.deepStrictEqual(await versions(harness), all(2));
   } finally {
     await harness.close();
   }

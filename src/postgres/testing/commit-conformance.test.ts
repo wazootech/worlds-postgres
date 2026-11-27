@@ -9,11 +9,12 @@
  * `commit-atomicity.test.ts` adds the quad-side checks the suite's chunk-only
  * view cannot make, and `reindex-atomicity.test.ts` pins the reindex contract.
  */
-import { assert } from "@std/assert";
+import test from "node:test";
+import assert from "node:assert/strict";
 import { runCommitConformanceSuite } from "@worlds/sdk/testing";
 import { createPostgresCommitHarness } from "./postgres-commit-subject.ts";
 
-Deno.test("PostgresRdfjsStore passes the shared commit conformance suite", async () => {
+test("PostgresRdfjsStore passes the shared commit conformance suite", async () => {
   const closers: Array<() => Promise<void>> = [];
   try {
     const report = await runCommitConformanceSuite({

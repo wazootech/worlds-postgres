@@ -1,10 +1,12 @@
-import { assertEquals, assertStringIncludes, assertThrows } from "@std/assert";
+import test from "node:test";
+import assert from "node:assert/strict";
+import { assertStringIncludes, thrown } from "@/postgres/testing/assertions.ts";
 import {
   buildPostgresSchemaSql,
   quoteFtsLanguage,
 } from "./postgres-schema-builder.ts";
 
-Deno.test("buildPostgresSchemaSql generates valid SQL statements", () => {
+test("buildPostgresSchemaSql generates valid SQL statements", () => {
   const sql = buildPostgresSchemaSql();
 
   assertStringIncludes(sql, "CREATE EXTENSION IF NOT EXISTS vector;");
@@ -15,7 +17,7 @@ Deno.test("buildPostgresSchemaSql generates valid SQL statements", () => {
   assertStringIncludes(sql, "to_tsvector('english', text)");
 });
 
-Deno.test("buildPostgresSchemaSql respects custom table names, dimensions, and ftsLanguage", () => {
+test("buildPostgresSchemaSql respects custom table names, dimensions, and ftsLanguage", () => {
   const sql = buildPostgresSchemaSql({
     quadsTableName: "custom_quads",
     searchChunksTableName: "custom_chunks",
@@ -29,9 +31,12 @@ Deno.test("buildPostgresSchemaSql respects custom table names, dimensions, and f
   assertStringIncludes(sql, "to_tsvector('simple', text)");
 });
 
-Deno.test("quoteFtsLanguage validates regconfig names", () => {
-  assertEquals(quoteFtsLanguage("english"), "'english'");
-  assertEquals(quoteFtsLanguage("pg_catalog.simple"), "'pg_catalog.simple'");
-  assertThrows(() => quoteFtsLanguage("eng; DROP TABLE x"), Error);
-  assertThrows(() => quoteFtsLanguage(""), Error);
+test("quoteFtsLanguage validates regconfig names", () => {
+  assert.deepStrictEqual(quoteFtsLanguage("english"), "'english'");
+  assert.deepStrictEqual(
+    quoteFtsLanguage("pg_catalog.simple"),
+    "'pg_catalog.simple'",
+  );
+  thrown(() => quoteFtsLanguage("eng; DROP TABLE x"), Error);
+  thrown(() => quoteFtsLanguage(""), Error);
 });

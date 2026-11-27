@@ -7,7 +7,9 @@
  * write quads only and every chunk row here comes from reindex(); commit-time
  * projection is covered by the shared conformance suite.
  */
-import { assertEquals, assertRejects } from "@std/assert";
+import test from "node:test";
+import assert from "node:assert/strict";
+import { rejected } from "@/postgres/testing/assertions.ts";
 import { DataFactory } from "@wazoo/sparql-engine";
 import type { EmbeddingService } from "@worlds/sdk/search-index/embedding-service";
 import {
@@ -65,7 +67,7 @@ async function indexedHarness() {
     deletions: [],
   });
   await harness.index.reindex({ readPageSize: 2 });
-  assertEquals(await versions(harness), {
+  assert.deepStrictEqual(await versions(harness), {
     "urn:t:a1": 1,
     "urn:t:a2": 1,
     "urn:t:a3": 1,
@@ -74,12 +76,12 @@ async function indexedHarness() {
   return { embeddings, harness };
 }
 
-Deno.test("an embedding failure on a later page keeps the rebuilt pages and leaves the rest unindexed", async () => {
+test("an embedding failure on a later page keeps the rebuilt pages and leaves the rest unindexed", async () => {
   const { embeddings, harness } = await indexedHarness();
   try {
     embeddings.version = 2;
     embeddings.failOnCall = embeddings.calls.length + 2; // page two
-    await assertRejects(
+    await rejected(
       () => harness.index.reindex({ readPageSize: 2 }),
       Error,
       "failed to vectorize literal chunk blocks",
@@ -87,10 +89,13 @@ Deno.test("an embedding failure on a later page keeps the rebuilt pages and leav
     // The shared rebuild clears the chunk table in page one's transaction, so
     // page one is rewritten and page two is not indexed until the rebuild is
     // run again, which repairs it.
-    assertEquals(await versions(harness), { "urn:t:a1": 2, "urn:t:a2": 2 });
+    assert.deepStrictEqual(await versions(harness), {
+      "urn:t:a1": 2,
+      "urn:t:a2": 2,
+    });
     embeddings.failOnCall = null;
     await harness.index.reindex({ readPageSize: 2 });
-    assertEquals(await versions(harness), {
+    assert.deepStrictEqual(await versions(harness), {
       "urn:t:a1": 2,
       "urn:t:a2": 2,
       "urn:t:a3": 2,
@@ -101,18 +106,18 @@ Deno.test("an embedding failure on a later page keeps the rebuilt pages and leav
   }
 });
 
-Deno.test("a failed page write rolls the page back", async () => {
+test("a failed page write rolls the page back", async () => {
   const { embeddings, harness } = await indexedHarness();
   try {
     embeddings.version = 2;
     harness.sql.failNextTransaction();
-    await assertRejects(
+    await rejected(
       () => harness.index.reindex({ readPageSize: 2 }),
       Error,
       "injected write failure",
     );
     // The delete and the upsert were one transaction, so nothing changed.
-    assertEquals(await versions(harness), {
+    assert.deepStrictEqual(await versions(harness), {
       "urn:t:a1": 1,
       "urn:t:a2": 1,
       "urn:t:a3": 1,
@@ -123,7 +128,7 @@ Deno.test("a failed page write rolls the page back", async () => {
   }
 });
 
-Deno.test("an embedding failure on a fresh index writes no chunk rows", async () => {
+test("an embedding failure on a fresh index writes no chunk rows", async () => {
   const embeddings = new ScriptedEmbeddings();
   embeddings.failOnCall = 1;
   const harness = await createPostgresCommitHarness(embeddings, "disabled");
@@ -132,14 +137,14 @@ Deno.test("an embedding failure on a fresh index writes no chunk rows", async ()
       insertions: [textQuad("a1"), textQuad("a2")],
       deletions: [],
     });
-    await assertRejects(() => harness.index.reindex(), Error);
-    assertEquals(await versions(harness), {});
+    await rejected(() => harness.index.reindex(), Error);
+    assert.deepStrictEqual(await versions(harness), {});
   } finally {
     await harness.close();
   }
 });
 
-Deno.test("reindex embeds each distinct chunk text once", async () => {
+test("reindex embeds each distinct chunk text once", async () => {
   const embeddings = new ScriptedEmbeddings();
   const harness = await createPostgresCommitHarness(embeddings, "disabled");
   try {
@@ -152,11 +157,11 @@ Deno.test("reindex embeds each distinct chunk text once", async () => {
       deletions: [],
     });
     const report = await harness.index.reindex();
-    assertEquals(report.chunkRowCount, 3);
-    assertEquals(embeddings.calls.length, 1);
-    assertEquals([...embeddings.calls[0]!].sort(), ["other", "same"]);
+    assert.deepStrictEqual(report.chunkRowCount, 3);
+    assert.deepStrictEqual(embeddings.calls.length, 1);
+    assert.deepStrictEqual([...embeddings.calls[0]!].sort(), ["other", "same"]);
     // Every chunk row, including the duplicate text, got a vector.
-    assertEquals(await versions(harness), {
+    assert.deepStrictEqual(await versions(harness), {
       "urn:t:a1": 1,
       "urn:t:a2": 1,
       "urn:t:a3": 1,
