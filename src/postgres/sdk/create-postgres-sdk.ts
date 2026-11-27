@@ -81,12 +81,12 @@ export async function createPostgresWorldsSdk(
   // exactly when an embedding service creates the chunks table.
   const search = options.embeddingService
     ? {
-      searchChunksTableName: options.searchChunksTableName,
-      embeddingService: options.embeddingService,
-      vectorDimensions: options.vectorDimensions,
-      textSplitter: options.textSplitter,
-      searchIndexOnImport: options.searchIndexOnImport,
-    }
+        searchChunksTableName: options.searchChunksTableName,
+        embeddingService: options.embeddingService,
+        vectorDimensions: options.vectorDimensions,
+        textSplitter: options.textSplitter,
+        searchIndexOnImport: options.searchIndexOnImport,
+      }
     : undefined;
   const store = new PostgresRdfjsStore({
     sql: options.sql,
@@ -112,7 +112,8 @@ export async function createPostgresWorldsSdk(
       tableName: options.tableName,
       search,
     }),
-    sparqlEngine: options.queryEngine ??
+    sparqlEngine:
+      options.queryEngine ??
       new WazooSparqlEngine({
         store,
         createTransaction: () => store.createTransaction(),

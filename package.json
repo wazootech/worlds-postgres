@@ -2,10 +2,25 @@
   "name": "@worlds/postgres",
   "private": true,
   "type": "module",
-  "description": "Bun toolchain manifest for @worlds/postgres. The published package is described by deno.json today (jsr.json after the cutover); the dependency ranges here mirror its import map.",
+  "description": "Bun toolchain manifest for @worlds/postgres. The published package is described by jsr.json; scripts/check-manifests.ts keeps the two in sync.",
   "packageManager": "bun@1.4.5",
+  "exports": {
+    ".": "./src/mod.ts",
+    "./quad-store": "./src/postgres/quad-store/mod.ts",
+    "./search-index": "./src/postgres/search-index/mod.ts",
+    "./rdfjs-store": "./src/postgres/rdfjs-store/mod.ts",
+    "./sdk": "./src/postgres/sdk/mod.ts",
+    "./schema": "./src/postgres/schema/postgres-schema-builder.ts"
+  },
   "scripts": {
-    "test": "bun test --timeout 120000"
+    "fmt": "bun fmt --no-script",
+    "fmt:check": "bun fmt --no-script --check",
+    "lint": "oxlint --deny-warnings",
+    "check": "bun check --no-script",
+    "check:manifests": "bun scripts/check-manifests.ts",
+    "test": "bun test --timeout 120000",
+    "publish:dry": "jsr publish --dry-run --allow-dirty",
+    "ci": "bun run fmt:check && bun run lint && bun run check && bun run check:manifests && bun run test"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.50",
@@ -24,5 +39,10 @@
     "postgres": "^3.4.9",
     "rdf-canonize": "^5.0.0",
     "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "jsr": "0.14.3",
+    "oxlint": "1.95.0"
   }
 }

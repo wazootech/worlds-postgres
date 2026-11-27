@@ -92,7 +92,7 @@ test("failLaterWrite fails a chunk write after the quad inserts and rolls back",
     // first, and the statement that failed is a chunk-row write after it.
     const ran = harness.sql.lastLaterFailure;
     const quadInsert = ran.findIndex((q) =>
-      q.startsWith("INSERT INTO worlds_quads")
+      q.startsWith("INSERT INTO worlds_quads"),
     );
     const failed = ran.length - 1;
     assert(quadInsert >= 0, `no quad insert ran: ${ran.join(" | ")}`);

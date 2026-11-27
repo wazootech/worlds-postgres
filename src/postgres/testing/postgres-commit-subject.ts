@@ -51,9 +51,9 @@ export class FailOnceSql implements PostgresSql {
   }
 
   public begin<T>(
-    fn: (
-      tx: { unsafe<T2>(query: string, params?: unknown[]): Promise<T2[]> },
-    ) => Promise<T>,
+    fn: (tx: {
+      unsafe<T2>(query: string, params?: unknown[]): Promise<T2[]>;
+    }) => Promise<T>,
   ): Promise<T> {
     return this.inner.begin(async (tx) => {
       const run: string[] = [];
@@ -76,7 +76,8 @@ export class FailOnceSql implements PostgresSql {
       if (
         run.includes("DELETE FROM worlds_search_chunks") &&
         !run.includes("DELETE FROM worlds_quads")
-      ) this.rebuilds++;
+      )
+        this.rebuilds++;
       if (this.failNext) {
         this.failNext = false;
         throw new Error("injected write failure");

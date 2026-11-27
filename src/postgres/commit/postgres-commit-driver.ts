@@ -100,9 +100,10 @@ export function createPostgresCommitDriver(
       const last = rows[rows.length - 1];
       return {
         quads: rows.map((row) => fromQuadRow(row)),
-        next: last && rows.length === pageSize
-          ? [last.skey, last.pkey, last.okey, last.gkey] as QuadCursor
-          : undefined,
+        next:
+          last && rows.length === pageSize
+            ? ([last.skey, last.pkey, last.okey, last.gkey] as QuadCursor)
+            : undefined,
       };
     },
   };

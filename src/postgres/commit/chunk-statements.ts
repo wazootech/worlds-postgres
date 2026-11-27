@@ -3,7 +3,9 @@ import type { PostgresStatement } from "./postgres-commit-driver.ts";
 
 /** escapeLike escapes LIKE wildcards so a quad id prefix match stays exact. */
 function escapeLike(value: string): string {
-  return value.replaceAll("\\", "\\\\").replaceAll("%", "\\%")
+  return value
+    .replaceAll("\\", "\\\\")
+    .replaceAll("%", "\\%")
     .replaceAll("_", "\\_");
 }
 
@@ -52,7 +54,8 @@ export function buildChunkRowStatements(
   return [
     buildDeleteChunksStatement(chunksTableName, localIndexByQuad.keys()),
     {
-      sql: `INSERT INTO ${chunksTableName} ` +
+      sql:
+        `INSERT INTO ${chunksTableName} ` +
         "(id, graph, subject, predicate, text, embedding) " +
         "SELECT id, graph, subject, predicate, text, embedding::vector " +
         "FROM json_to_recordset($1::json) AS x(" +

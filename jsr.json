@@ -2,7 +2,6 @@
   "name": "@worlds/postgres",
   "version": "0.4.1",
   "license": "MIT",
-  "nodeModulesDir": "auto",
   "exports": {
     ".": "./src/mod.ts",
     "./quad-store": "./src/postgres/quad-store/mod.ts",
@@ -22,11 +21,7 @@
     "postgres": "npm:postgres@^3.4.9",
     "pgvector": "npm:pgvector@^0.3.0",
     "@worlds/sdk": "jsr:@worlds/sdk@^0.11.0",
-    "@worlds/sqlite/sql-core": "jsr:@worlds/sqlite@^0.8.1/sql-core",
-    "@std/async": "jsr:@std/async@^1.5.0",
-    "@std/encoding": "jsr:@std/encoding@^1.0.11",
-    "@std/fs": "jsr:@std/fs@^1.0.24",
-    "@std/path": "jsr:@std/path@^1.1.6",
+    "@worlds/sqlite": "jsr:@worlds/sqlite@^0.8.1",
     "@types/n3": "npm:@types/n3@1.26.1",
     "n3": "npm:n3@^2.2.11",
     "rdf-canonize": "npm:rdf-canonize@^5.0.0",
@@ -34,33 +29,8 @@
     "@langchain/textsplitters": "npm:@langchain/textsplitters@^1.0.1",
     "zod": "npm:zod@^4.4.3"
   },
-  "minimumDependencyAge": {
-    "age": "P1D",
-    "exclude": [
-      "jsr:@wazoo/sparql-engine",
-      "jsr:@worlds/sdk",
-      "jsr:@worlds/sqlite"
-    ]
-  },
   "publish": {
     "include": ["src/", "README.md", "LICENSE"],
     "exclude": ["src/**/*.test.ts", "src/postgres/testing/"]
-  },
-  "tasks": {
-    "fmt": "deno fmt",
-    "fmt:check": "deno fmt --check",
-    "lint": "deno lint",
-    "check": "deno check",
-    "test": "deno test --allow-all",
-    "publish:dry": "deno publish --dry-run --allow-dirty",
-    "ci": {
-      "description": "Formats, lints, checks, and tests the code",
-      "dependencies": [
-        "fmt:check",
-        "lint",
-        "check",
-        "test"
-      ]
-    }
   }
 }

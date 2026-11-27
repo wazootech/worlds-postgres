@@ -13,25 +13,25 @@ function criteriaSql(
     `IN (SELECT jsonb_array_elements_text(${param}::jsonb))`;
   if (criteria?.subjects?.length) {
     parts.push(
-      `payload->'s'->>'v' ${
-        inJsonArray(bind(JSON.stringify(criteria.subjects)))
-      }`,
+      `payload->'s'->>'v' ${inJsonArray(
+        bind(JSON.stringify(criteria.subjects)),
+      )}`,
     );
   }
   if (criteria?.predicates?.length) {
     parts.push(
-      `payload->'p'->>'v' ${
-        inJsonArray(bind(JSON.stringify(criteria.predicates)))
-      }`,
+      `payload->'p'->>'v' ${inJsonArray(
+        bind(JSON.stringify(criteria.predicates)),
+      )}`,
     );
   }
   if (criteria?.graphs?.length) {
     const arrayParam = bind(JSON.stringify(criteria.graphs));
     parts.push(
       `((payload->'g'->>'t' = 'D' AND '' ${inJsonArray(arrayParam)}) ` +
-        `OR (payload->'g'->>'t' = 'N' AND payload->'g'->>'v' ${
-          inJsonArray(arrayParam)
-        }))`,
+        `OR (payload->'g'->>'t' = 'N' AND payload->'g'->>'v' ${inJsonArray(
+          arrayParam,
+        )}))`,
     );
   }
   return parts;

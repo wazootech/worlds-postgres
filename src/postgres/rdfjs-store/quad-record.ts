@@ -69,9 +69,9 @@ export function fromTermRecord(rec: TermRecord): rdfjs.Term {
       if (rec.lang) {
         return rec.dir
           ? DataFactory.literal(rec.v, {
-            language: rec.lang,
-            direction: rec.dir as "ltr" | "rtl",
-          })
+              language: rec.lang,
+              direction: rec.dir as "ltr" | "rtl",
+            })
           : DataFactory.literal(rec.v, rec.lang);
       }
       return DataFactory.literal(rec.v, DataFactory.namedNode(rec.dt));
@@ -132,9 +132,10 @@ export function fromQuadRow(row: Pick<QuadRow, "payload">): rdfjs.Quad {
   // Drivers differ: postgres.js and PGlite both parse JSONB columns into JS
   // objects by default; string payloads (e.g. batch json_to_recordset
   // round-trips) are parsed here.
-  const rec: QuadRecord = typeof row.payload === "string"
-    ? JSON.parse(row.payload)
-    : row.payload as unknown as QuadRecord;
+  const rec: QuadRecord =
+    typeof row.payload === "string"
+      ? JSON.parse(row.payload)
+      : (row.payload as unknown as QuadRecord);
   return fromQuadRecord(rec);
 }
 

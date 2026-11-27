@@ -28,11 +28,16 @@ class VersionedEmbeddings implements EmbeddingService {
   public version = 1;
 
   public embed(texts: string[]): Promise<Array<number[]>> {
-    return Promise.resolve(texts.map(() => {
-      const vector = new Array<number>(CONFORMANCE_VECTOR_DIMENSIONS).fill(0);
-      vector[0] = this.version;
-      return vector;
-    }));
+    return Promise.resolve(
+      texts.map(() => {
+        const vector = Array.from(
+          { length: CONFORMANCE_VECTOR_DIMENSIONS },
+          () => 0,
+        );
+        vector[0] = this.version;
+        return vector;
+      }),
+    );
   }
 }
 
@@ -42,7 +47,8 @@ async function versions(h: PostgresCommitHarness) {
     "SELECT subject, embedding::text AS embedding FROM worlds_search_chunks",
   );
   return Object.fromEntries(
-    rows.map((r) => [r.subject, JSON.parse(r.embedding)[0] as number])
+    rows
+      .map((r) => [r.subject, JSON.parse(r.embedding)[0] as number])
       .sort(([a], [b]) => String(a).localeCompare(String(b))),
   );
 }
@@ -58,7 +64,7 @@ async function indexed() {
         p,
         literal(`${n} text`),
         n === "a1" ? DataFactory.defaultGraph() : g,
-      )
+      ),
     ),
     deletions: [],
   });

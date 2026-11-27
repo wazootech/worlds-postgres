@@ -219,18 +219,18 @@ export class PostgresRdfjsStore implements rdfjs.Store<rdfjs.Quad> {
    * context.importMode === "replace" clears the table first (the SDK's
    * replace-import contract).
    */
-  public applyPatch(
-    patch: Patch,
-    context?: TransactionContext,
-  ): Promise<void> {
+  public applyPatch(patch: Patch, context?: TransactionContext): Promise<void> {
     return this.enqueueWrite(async () => {
-      await this.commit({
-        deletions: patch.deletions,
-        // A patch may repeat a quad; one row (and one set of chunks) is enough.
-        insertions: [
-          ...new Map(patch.insertions.map((q) => [quadKey(q), q])).values(),
-        ],
-      }, context);
+      await this.commit(
+        {
+          deletions: patch.deletions,
+          // A patch may repeat a quad; one row (and one set of chunks) is enough.
+          insertions: [
+            ...new Map(patch.insertions.map((q) => [quadKey(q), q])).values(),
+          ],
+        },
+        context,
+      );
     });
   }
 
@@ -252,16 +252,17 @@ export class PostgresRdfjsStore implements rdfjs.Store<rdfjs.Quad> {
     object?: rdfjs.Term,
     graph?: rdfjs.Term,
   ): this {
-    const quad = predicate !== undefined && object !== undefined
-      ? DataFactory.quad(
-        // RDF 1.2 allows any term in any position (literal subjects in
-        // quoted triples); the engine's position types are narrower, so cast.
-        quadOrSubject as rdfjs.Quad_Subject,
-        predicate as rdfjs.Quad_Predicate,
-        object as rdfjs.Quad_Object,
-        graph as rdfjs.Quad_Graph,
-      )
-      : quadOrSubject as rdfjs.Quad;
+    const quad =
+      predicate !== undefined && object !== undefined
+        ? DataFactory.quad(
+            // RDF 1.2 allows any term in any position (literal subjects in
+            // quoted triples); the engine's position types are narrower, so cast.
+            quadOrSubject as rdfjs.Quad_Subject,
+            predicate as rdfjs.Quad_Predicate,
+            object as rdfjs.Quad_Object,
+            graph as rdfjs.Quad_Graph,
+          )
+        : (quadOrSubject as rdfjs.Quad);
     // SQL writes are asynchronous; the rdfjs.Store interface types addQuad
     // as synchronous, so the write is queued and the caller can await it
     // via flush() or a later read. The SDK and engine never use this path
@@ -343,9 +344,7 @@ export class PostgresRdfjsStore implements rdfjs.Store<rdfjs.Quad> {
       const pageWhere = [...where];
       const pageArgs = [...args];
       if (cursor) {
-        pageWhere.push(
-          `(skey, pkey, okey, gkey) > ($1, $2, $3, $4)`,
-        );
+        pageWhere.push(`(skey, pkey, okey, gkey) > ($1, $2, $3, $4)`);
         pageArgs.push(...cursor);
       }
       const sqlText =
@@ -379,7 +378,7 @@ export class PostgresRdfjsStore implements rdfjs.Store<rdfjs.Quad> {
     graph?: rdfjs.Term | null,
   ): PgQuadStream {
     return new PgQuadStream(() =>
-      this.matchPages(subject, predicate, object, graph)
+      this.matchPages(subject, predicate, object, graph),
     );
   }
 
@@ -408,7 +407,8 @@ export class PostgresRdfjsStore implements rdfjs.Store<rdfjs.Quad> {
     graph?: rdfjs.Term | null,
   ): Promise<number> {
     const { where, args } = this.matchWhere(subject, predicate, object, graph);
-    const sqlText = `SELECT COUNT(*) AS count FROM ${this.tableName}` +
+    const sqlText =
+      `SELECT COUNT(*) AS count FROM ${this.tableName}` +
       (where.length > 0 ? ` WHERE ${where.join(" AND ")}` : "");
     const rows = await this.sql.unsafe<{ count: string }>(sqlText, args);
     return Number(rows[0]?.count ?? 0);
@@ -425,7 +425,7 @@ export class PostgresRdfjsStore implements rdfjs.Store<rdfjs.Quad> {
     graph?: rdfjs.Term | null,
   ): PgQuadStream {
     return new PgQuadStream(() =>
-      this.removeMatchesGenerator(subject, predicate, object, graph)
+      this.removeMatchesGenerator(subject, predicate, object, graph),
     );
   }
 
@@ -450,12 +450,9 @@ export class PostgresRdfjsStore implements rdfjs.Store<rdfjs.Quad> {
   }
 
   /** deleteGraph removes every quad in the named graph. */
-  public deleteGraph(
-    graph: rdfjs.Quad_Graph | string,
-  ): PgQuadStream {
-    const graphTerm = typeof graph === "string"
-      ? DataFactory.namedNode(graph)
-      : graph;
+  public deleteGraph(graph: rdfjs.Quad_Graph | string): PgQuadStream {
+    const graphTerm =
+      typeof graph === "string" ? DataFactory.namedNode(graph) : graph;
     return this.removeMatches(null, null, null, graphTerm);
   }
 
